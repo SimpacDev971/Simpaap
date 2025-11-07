@@ -14,4 +14,73 @@ model Tenant {
   subdomain String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relation : un tenant a plusieurs utilisateurs
+  users     User[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      Role     @default(MEMBER)
+  tenantId  String?  @db.VarChar(50)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  accounts  Account[]
+  sessions  Session[]
+}
+
+enum Role {
+  SUPERADMIN  // gère tous les tenants
+  ADMIN       // gère son tenant et les membres
+  MEMBER      // simple membre du tenant
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+}
+
+// NextAuth (Prisma Adapter) models
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires   DateTime
+
+  @@unique([identifier, token])
 }

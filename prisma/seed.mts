@@ -1,14 +1,28 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import bcrypt from 'bcryptjs'
+import prisma from '../lib/prisma'
 
 async function main() {
-  await prisma.tenant.createMany({
-    data: [
-      { name: 'Tenant 1', subdomain: 'tenant1' },
-      { name: 'Tenant 2', subdomain: 'tenant2' },
-      { name: 'Test', subdomain: 'test' },
-    ],
+  // Créer tenant si nécessaire
+  const tenants = [{ name: 'test', subdomain: 'test' }]
+  for (const tenant of tenants) {
+    await prisma.tenant.upsert({
+      where: { subdomain: tenant.subdomain },
+      update: {},
+      create: tenant,
+    })
+  }
+
+  // Créer superadmin
+  const hash = await bcrypt.hash('admin1234', 10)
+  await prisma.user.upsert({
+    where: { email: 'njudes@simpac.fr' },
+    update: {},
+    create: {
+      email: 'njudes@simpac.fr',
+      password: hash,
+      name: 'Nico',
+      role: 'SUPERADMIN',
+    },
   })
 }
 

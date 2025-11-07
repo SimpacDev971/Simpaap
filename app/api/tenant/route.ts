@@ -1,14 +1,27 @@
-import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import prisma from "@/lib/prisma";
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../auth/[...nextauth]/route';
 
 export async function GET(request: NextRequest) {
   const subdomain = request.nextUrl.searchParams.get('subdomain')
 
-  console.log('API: Received request for subdomain:', subdomain)
-
+  // Si pas de subdomain, retourner tous les tenants (nécessite SUPERADMIN)
   if (!subdomain) {
-    console.log('API: Subdomain is required')
-    return NextResponse.json({ error: 'Subdomain is required' }, { status: 400 })
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'SUPERADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    try {
+      const tenants = await prisma.tenant.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+      return NextResponse.json(tenants);
+    } catch (error) {
+      console.error('API: Error fetching tenants:', error);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
   }
 
   try {
@@ -17,10 +30,7 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true, subdomain: true }
     })
 
-    console.log('API: Tenant found:', tenant)
-
     if (!tenant) {
-      console.log('API: Tenant not found')
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
     }
 

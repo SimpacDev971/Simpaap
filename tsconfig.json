@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -10,7 +14,7 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -18,13 +22,29 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
-    }
+      "@/*": [
+        "./*"
+      ]
+    },
+    "target": "ES2017"
   },
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node"
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "app/page.jsx", "app/components/CreateTenantForm.jsx", "scripts/check-tenants.mts", "scripts/check-tenants.js", "prisma/seed.mts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "app/page.jsx",
+    "app/components/CreateTenantForm.jsx",
+    "scripts/check-tenants.mts",
+    "scripts/check-tenants.js",
+    "prisma/seed.mts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
