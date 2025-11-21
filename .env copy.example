@@ -13,3 +13,9 @@ DIRECT_URL="postgresql://postgres.[projectname]:[password]@aws-0-us-west-1.poole
 # Supabase public URL and anon key
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# Mailjet transactional emails
+MAILJET_API_KEY=
+MAILJET_API_SECRET=
+MAILJET_SENDER_EMAIL=no-reply@example.com
+MAILJET_SENDER_NAME=Simpaap

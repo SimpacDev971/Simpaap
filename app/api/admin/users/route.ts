@@ -1,3 +1,4 @@
+import { MailjetNotConfiguredError, sendMailjetEmail } from '@/lib/mailjet';
 import prisma from '@/lib/prisma';
 import { hash } from 'bcryptjs';
 import { getServerSession } from 'next-auth';
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { email, password, name, role, tenantId } = await req.json();
+    const { email, password, name, role, tenantSubdomain } = await req.json();
 
     // Champs obligatoires
     if (!email || !password) {
@@ -35,12 +36,45 @@ export async function POST(req: NextRequest) {
       role: role || 'MEMBER',
     };
 
-    // Si tenantId fourni, connecter le tenant
-    if (tenantId) {
-      userData.tenant = { connect: { id: tenantId } };
+    // Si tenantSubdomain fourni, trouver le tenant et le connecter
+    if (tenantSubdomain) {
+      const tenant = await prisma.tenant.findUnique({ where: { subdomain: tenantSubdomain } });
+      if (!tenant) {
+        return NextResponse.json({ error: 'Tenant non trouvé' }, { status: 404 });
+      }
+      userData.tenant = { connect: { id: tenant.id } };
     }
 
     const newUser = await prisma.user.create({ data: userData });
+
+    try {
+      const displayName = newUser.name?.length ? newUser.name : 'utilisateur';
+      await sendMailjetEmail({
+        to: { email: newUser.email, name: newUser.name ?? undefined },
+        subject: 'Bienvenue sur Simpaap',
+        text: [
+          `Bonjour ${displayName},`,
+          '',
+          "Votre espace Simpaap est prêt. Vous pouvez maintenant vous connecter avec l'adresse email enregistrée.",
+          '',
+          'Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.',
+          '',
+          'À bientôt,',
+          'L’équipe Simpaap',
+        ].join('\n'),
+        html: `<p>Bonjour ${displayName},</p>
+<p>Votre accès à <strong>Simpaap</strong> est prêt. Vous pouvez maintenant vous connecter avec l'adresse email enregistrée.</p>
+<p>Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.</p>
+<p>À bientôt,<br/>L’équipe Simpaap</p>`,
+        customId: 'user-created',
+      });
+    } catch (error) {
+      if (error instanceof MailjetNotConfiguredError) {
+        console.warn('Mailjet non configuré — email de bienvenue non envoyé.');
+      } else {
+        console.error('Erreur envoi email de bienvenue Mailjet:', error);
+      }
+    }
 
     return NextResponse.json(newUser, { status: 201 });
   } catch (err: any) {
@@ -56,7 +90,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { id, email, password, name, role, tenantId } = await req.json();
+    const { id, email, password, name, role, tenantSubdomain } = await req.json();
 
     if (!id) {
       return NextResponse.json({ error: 'ID utilisateur requis' }, { status: 400 });
@@ -87,10 +121,14 @@ export async function PUT(req: NextRequest) {
       updateData.password = await hash(password, 10);
     }
 
-    // Mettre à jour le tenant si fourni
-    if (tenantId !== undefined) {
-      if (tenantId) {
-        updateData.tenant = { connect: { id: tenantId } };
+    // Mettre à jour le tenant si tenantSubdomain fourni
+    if (tenantSubdomain !== undefined) {
+      if (tenantSubdomain) {
+        const tenant = await prisma.tenant.findUnique({ where: { subdomain: tenantSubdomain } });
+        if (!tenant) {
+          return NextResponse.json({ error: 'Tenant non trouvé' }, { status: 404 });
+        }
+        updateData.tenant = { connect: { id: tenant.id } };
       } else {
         updateData.tenantId = null;
       }
@@ -146,14 +184,28 @@ export async function DELETE(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'SUPERADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session || session.user.role !== 'SUPERADMIN' && session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
     }
 
-    const users = await prisma.user.findMany({
-      include: { tenant: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    console.log(session.user)
+    let users = [];
+    if (session.user.tenantSlug == 'admin') {
+      users = await prisma.user.findMany({
+        include: { tenant: true },
+        orderBy: { tenantId: 'desc' },
+      });
+    } else {
+      users = await prisma.user.findMany({
+        where: {
+          tenant: {
+            is: { name: session.user.tenantSlug } // <- "is" pour relation 1:1
+          }
+        },
+        include: { tenant: true },
+        orderBy: { tenant: { name: "asc" } }
+      })
+    }
 
     return NextResponse.json(users, { status: 200 });
   } catch (err: any) {

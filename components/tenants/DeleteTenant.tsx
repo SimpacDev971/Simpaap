@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 interface DeleteTenantProps {
   tenantId: string;
@@ -48,54 +49,51 @@ export default function DeleteTenant({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold mb-4 text-red-600 dark:text-red-400">Supprimer le tenant</h2>
+    <div className="bg-background rounded-lg shadow-lg p-6">
+      <h2 className="text-2xl font-bold mb-4 text-destructive">Supprimer le tenant</h2>
       <div className="space-y-4">
-        <p className="text-gray-700 dark:text-gray-300">
-          Êtes-vous sûr de vouloir supprimer le tenant <strong className="text-gray-900 dark:text-white">{tenantName}</strong> ?
+        <p className="text-foreground">
+          Êtes-vous sûr de vouloir supprimer le tenant <strong className="text-foreground">{tenantName}</strong> ?
         </p>
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300 px-4 py-3 rounded">
+        <div className="bg-accent border border-accent text-accent-foreground px-4 py-3 rounded">
           <p className="font-semibold">Attention !</p>
           <p className="text-sm mt-1">
             Tous les utilisateurs de ce tenant (sauf les SUPERADMIN) seront également supprimés.
             Cette action est irréversible.
           </p>
         </div>
-
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Tapez <strong>SUPPRIMER</strong> pour confirmer
           </label>
           <input
             type="text"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-destructive bg-background text-foreground placeholder-muted-foreground"
             placeholder="SUPPRIMER"
           />
         </div>
-
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
-            {error}
-          </div>
+          <div className="bg-destructive/20 border border-destructive text-destructive px-4 py-3 rounded">{error}</div>
         )}
 
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={handleDelete}
             disabled={loading || confirmText !== "SUPPRIMER"}
-            className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            variant="destructive"
+            className="flex-1"
           >
             {loading ? "Suppression..." : "Supprimer"}
-          </button>
+          </Button>
           {onCancel && (
-            <button
+            <Button
               onClick={onCancel}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+              variant="outline"
             >
               Annuler
-            </button>
+            </Button>
           )}
         </div>
       </div>

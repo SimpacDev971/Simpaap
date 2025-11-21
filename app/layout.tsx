@@ -1,13 +1,15 @@
+import SessionClientProvider from "@/app/SessionClientProvider";
+import AppLayout from "@/components/layout/AppLayout";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import AppLayout from "@/components/layout/AppLayout";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Simpaap - Multi-tenant Application",
-  description: "Application multi-tenant avec gestion des utilisateurs et des tenants",
+  title: "Simpaap - Editique",
+  description: "Simplifiez l'envoi de vos courrier",
 };
 
 export default function RootLayout({
@@ -16,10 +18,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    <SessionClientProvider>
     <html lang="fr" suppressHydrationWarning>
-      <body className={inter.className}>
-        <AppLayout>{children}</AppLayout>
+      <body className={`bg-background text-foreground min-h-screen`}>
+        <ThemeProvider>
+          <AppLayout>{children}</AppLayout>
+        </ThemeProvider>
       </body>
     </html>
+  </SessionClientProvider>
   );
 }

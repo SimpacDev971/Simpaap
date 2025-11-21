@@ -38,7 +38,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "app/page.jsx",
-    "app/components/CreateTenantForm.jsx",
+    "app/components1/CreateTenantForm.jsx",
     "scripts/check-tenants.mts",
     "scripts/check-tenants.js",
     "prisma/seed.mts",

@@ -1,11 +1,11 @@
 import prisma from "@/lib/prisma";
-import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '../auth/[...nextauth]/route';
 
 export async function GET(request: NextRequest) {
   const subdomain = request.nextUrl.searchParams.get('subdomain')
-
+  console.log("1: "+subdomain)
   // Si pas de subdomain, retourner tous les tenants (nécessite SUPERADMIN)
   if (!subdomain) {
     const session = await getServerSession(authOptions);
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const tenant = await prisma.tenant.findUnique({
+    const tenant = await prisma.tenant.findFirst({
       where: { subdomain },
       select: { id: true, name: true, subdomain: true }
     })

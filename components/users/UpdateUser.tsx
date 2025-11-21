@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+
+interface Tenant {
+  id: string;
+  name: string;
+  subdomain: string;
+}
 
 interface User {
   id: string;
@@ -9,30 +16,50 @@ interface User {
   name?: string | null;
   role: "ADMIN" | "MEMBER" | "SUPERADMIN";
   tenantId?: string | null;
+  tenant?: { subdomain: string } | null;
 }
 
 interface UpdateUserProps {
   user: User;
   onSuccess?: () => void;
   onCancel?: () => void;
-  tenantId?: string;
+  tenantSubdomain?: string; // Le subdomain actuel (pour savoir si on est sur admin ou non)
 }
 
 export default function UpdateUser({
   user,
   onSuccess,
   onCancel,
-  tenantId,
+  tenantSubdomain,
 }: UpdateUserProps) {
-  const [formData, setFormData] = useState<Partial<User>>({
+  const isAdminSubdomain = tenantSubdomain === "admin";
+  const [formData, setFormData] = useState<Partial<User & { tenantSubdomain: string }>>({
     email: user.email,
     password: "",
     name: user.name || "",
     role: user.role,
-    tenantId: user.tenantId || tenantId || "",
+    tenantSubdomain: user.tenant?.subdomain || tenantSubdomain || "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+
+  // Fetch tenants si on est sur admin
+  useEffect(() => {
+    if (isAdminSubdomain) {
+      const fetchTenants = async () => {
+        try {
+          const res = await fetch(`/api/tenant`);
+          if (!res.ok) throw new Error("Impossible de récupérer les tenants");
+          const data = await res.json();
+          setTenants(data);
+        } catch (err: any) {
+          setError(err.message || "Impossible de récupérer les tenants");
+        }
+      };
+      fetchTenants();
+    }
+  }, [isAdminSubdomain]);
 
   useEffect(() => {
     setFormData({
@@ -40,9 +67,9 @@ export default function UpdateUser({
       password: "",
       name: user.name || "",
       role: user.role,
-      tenantId: user.tenantId || tenantId || "",
+      tenantSubdomain: user.tenant?.subdomain || tenantSubdomain || "",
     });
-  }, [user, tenantId]);
+  }, [user, tenantSubdomain]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -67,13 +94,19 @@ export default function UpdateUser({
         payload.password = formData.password;
       }
 
-      if (formData.tenantId) {
-        payload.tenantId = formData.tenantId;
+      // Ajouter tenantSubdomain si on est sur admin, sinon utiliser le subdomain actuel
+      if (isAdminSubdomain) {
+        if (formData.tenantSubdomain) {
+          payload.tenantSubdomain = formData.tenantSubdomain;
+        }
+      } else {
+        // Si ce n'est pas admin, utiliser le subdomain actuel (ne peut pas changer)
+        payload.tenantSubdomain = tenantSubdomain;
       }
 
-      const endpoint = tenantId
-        ? `/api/tenant/users?subdomain=${tenantId}`
-        : "/api/admin/users";
+      const endpoint = isAdminSubdomain
+        ? "/api/admin/users"
+        : `/api/tenant/users?subdomain=${tenantSubdomain}`;
 
       const res = await fetch(endpoint, {
         method: "PUT",
@@ -96,8 +129,7 @@ export default function UpdateUser({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Modifier l'utilisateur</h2>
+    <div className="bg-background rounded-lg shadow-lg p-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -152,47 +184,55 @@ export default function UpdateUser({
           >
             <option value="MEMBER">MEMBER</option>
             <option value="ADMIN">ADMIN</option>
-            {!tenantId && <option value="SUPERADMIN">SUPERADMIN</option>}
+            {isAdminSubdomain && <option value="SUPERADMIN">SUPERADMIN</option>}
           </select>
         </div>
 
-        {!tenantId && (
+        {/* Tenant - Liste déroulante si admin, masqué sinon */}
+        {isAdminSubdomain && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tenant ID
+              Tenant *
             </label>
-            <input
-              type="text"
-              name="tenantId"
-              value={formData.tenantId}
+            <select
+              name="tenantSubdomain"
+              value={formData.tenantSubdomain}
               onChange={handleChange}
+              required
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
+            >
+              <option value="">Sélectionner un tenant</option>
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.subdomain}>
+                  {tenant.name} ({tenant.subdomain})
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
+          <div className="bg-destructive border border-red-200 dark:border-red-800 text-destructive-foreground px-4 py-3 rounded">
             {error}
           </div>
         )}
 
         <div className="flex gap-2">
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex-1"
           >
             {loading ? "Mise à jour..." : "Mettre à jour"}
-          </button>
+          </Button>
           {onCancel && (
-            <button
+            <Button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+              variant="outline"
             >
               Annuler
-            </button>
+            </Button>
           )}
         </div>
       </form>

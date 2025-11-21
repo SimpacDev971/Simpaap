@@ -34,6 +34,7 @@ export const authOptions = {
           name: user.name,
           role: user.role,
           tenantSlug: user.tenant?.subdomain || null,
+          theme: user.theme || "default",
         };
       },
     }),
@@ -44,6 +45,7 @@ export const authOptions = {
         token.id = user.id;
         token.role = user.role;
         token.tenantSlug = user.tenantSlug;
+        token.theme = user.theme;
       }
       return token;
     },
@@ -52,6 +54,7 @@ export const authOptions = {
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.tenantSlug = token.tenantSlug;
+        session.user.theme = token.theme;
       }
       return session;
     },

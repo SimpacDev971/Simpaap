@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export const config = {
   matcher: [
@@ -41,6 +41,7 @@ export async function middleware(req: NextRequest) {
         // Check if this segment corresponds to an existing tenant
         const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_URL || `http://localhost:${url.port || 3000}`;
         const tenantCheck = await fetch(`${baseUrl}/api/tenant?subdomain=${firstSegment}`);
+        console.log("tenantCheck "+tenantCheck)
         
         if (tenantCheck.ok) {
           // This is a tenant accessed directly via localhost:3000/[subdomain]/...
@@ -63,7 +64,7 @@ export async function middleware(req: NextRequest) {
     try {
       // Use fetch to verify if the subdomain exists
       const response = await fetch(`${url.origin}/api/tenant?subdomain=${subdomain}`);
-      
+      console.log(response.ok)
       if (response.ok) {
         console.log('Middleware: Valid subdomain detected, rewriting URL');
         // Rewrite the URL to a dynamic route based on the subdomain

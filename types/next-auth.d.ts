@@ -10,6 +10,7 @@ declare module "next-auth" {
       name?: string | null;
       role: Role;
       tenantSlug?: string | null;
+      theme?: string | null;
     };
   }
 
@@ -19,6 +20,7 @@ declare module "next-auth" {
     name?: string | null;
     role: Role;
     tenantSlug?: string | null;
+    theme?: string | null;
   }
 }
 
@@ -27,5 +29,6 @@ declare module "next-auth/jwt" {
     id: string;
     role: Role;
     tenantSlug?: string | null;
+    theme?: string | null;
   }
 }

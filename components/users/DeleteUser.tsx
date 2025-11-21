@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 interface DeleteUserProps {
   userId: string;
@@ -54,7 +55,7 @@ export default function DeleteUser({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+    <div className="bg-background rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-bold mb-4 text-red-600 dark:text-red-400">Supprimer l'utilisateur</h2>
       <div className="space-y-4">
         <p className="text-gray-700 dark:text-gray-300">
@@ -78,26 +79,27 @@ export default function DeleteUser({
         </div>
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
+          <div className="bg-destructive border border-destructive/20 text-destructive-foreground px-4 py-3 rounded">
             {error}
           </div>
         )}
 
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={handleDelete}
             disabled={loading || confirmText !== "SUPPRIMER"}
-            className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            variant="destructive"
+            className="flex-1"
           >
             {loading ? "Suppression..." : "Supprimer"}
-          </button>
+          </Button>
           {onCancel && (
-            <button
+            <Button
               onClick={onCancel}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+              variant="outline"
             >
               Annuler
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -1,32 +1,70 @@
 "use client";
 
-import { useState } from "react";
-import { User } from "@/app/components/UserForm";
+import { User } from "@/app/components1/UserForm";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+
+interface Tenant {
+  id: string;
+  name: string;
+  subdomain: string;
+}
 
 interface CreateUserProps {
   onSuccess?: () => void;
   onCancel?: () => void;
-  tenantId?: string;
-  hideTenantId?: boolean;
+  subdomain: string; // Le subdomain actuel
   defaultRole?: "ADMIN" | "MEMBER" | "SUPERADMIN";
 }
 
 export default function CreateUser({
   onSuccess,
   onCancel,
-  tenantId,
-  hideTenantId = false,
+  subdomain,
   defaultRole = "MEMBER",
 }: CreateUserProps) {
-  const [formData, setFormData] = useState<Partial<User>>({
+  const [formData, setFormData] = useState<Partial<User & { tenantSubdomain: string }>>({
     email: "",
     password: "",
     name: "",
     role: defaultRole,
-    tenantId: tenantId || "",
+    tenantSubdomain: subdomain === "admin" ? "" : subdomain, // Par défaut le subdomain actuel sauf si admin
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [tenantName, setTenantName] = useState(subdomain);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const isAdminSubdomain = subdomain === "admin";
+
+  // Fetch tenants si on est sur admin
+  useEffect(() => {
+    if (isAdminSubdomain) {
+      const fetchTenants = async () => {
+        try {
+          const res = await fetch(`/api/tenant`);
+          if (!res.ok) throw new Error("Impossible de récupérer les tenants");
+          const data = await res.json();
+          setTenants(data);
+        } catch (err: any) {
+          setError(err.message || "Impossible de récupérer les tenants");
+        }
+      };
+      fetchTenants();
+    } else {
+      // Si ce n'est pas admin, récupérer le nom du tenant actuel
+      const fetchTenantName = async () => {
+        try {
+          const res = await fetch(`/api/tenant?subdomain=${subdomain}`);
+          if (!res.ok) throw new Error("Tenant introuvable");
+          const data = await res.json();
+          setTenantName(data.name);
+        } catch (err: any) {
+          setError(err.message || "Impossible de récupérer le tenant");
+        }
+      };
+      fetchTenantName();
+    }
+  }, [subdomain, isAdminSubdomain]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -39,12 +77,26 @@ export default function CreateUser({
     setError("");
 
     try {
-      const payload = { ...formData };
-      if (!payload.tenantId) delete payload.tenantId;
+      const payload: any = {
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        role: formData.role,
+      };
 
-      const endpoint = tenantId
-        ? `/api/tenant/users?subdomain=${tenantId}`
-        : "/api/admin/users";
+      // Ajouter tenantSubdomain si on est sur admin, sinon utiliser le subdomain actuel
+      if (isAdminSubdomain) {
+        if (formData.tenantSubdomain) {
+          payload.tenantSubdomain = formData.tenantSubdomain;
+        }
+      } else {
+        // Si ce n'est pas admin, utiliser le subdomain actuel
+        payload.tenantSubdomain = subdomain;
+      }
+
+      const endpoint = isAdminSubdomain
+        ? "/api/admin/users"
+        : `/api/tenant/users?subdomain=${subdomain}`;
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -65,7 +117,7 @@ export default function CreateUser({
         password: "",
         name: "",
         role: defaultRole,
-        tenantId: tenantId || "",
+        tenantSubdomain: isAdminSubdomain ? "" : subdomain,
       });
     } catch (err: any) {
       setError(err.message || "Erreur inattendue");
@@ -75,9 +127,10 @@ export default function CreateUser({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Créer un utilisateur</h2>
+    <div className="bg-background rounded-lg shadow-lg p-6">
+      <h2 className="text-2xl font-bold mb-4 text-foreground">Créer un utilisateur {tenantName}</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Email */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Email *
@@ -93,6 +146,7 @@ export default function CreateUser({
           />
         </div>
 
+        {/* Mot de passe */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Mot de passe *
@@ -108,6 +162,7 @@ export default function CreateUser({
           />
         </div>
 
+        {/* Nom */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Nom
@@ -122,6 +177,7 @@ export default function CreateUser({
           />
         </div>
 
+        {/* Rôle */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Rôle *
@@ -134,48 +190,56 @@ export default function CreateUser({
           >
             <option value="MEMBER">MEMBER</option>
             <option value="ADMIN">ADMIN</option>
-            {!tenantId && <option value="SUPERADMIN">SUPERADMIN</option>}
+            {isAdminSubdomain && <option value="SUPERADMIN">SUPERADMIN</option>}
           </select>
         </div>
 
-        {!hideTenantId && (
+        {/* Tenant - Liste déroulante si admin, masqué sinon */}
+        {isAdminSubdomain && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tenant ID
+              Tenant *
             </label>
-            <input
-              type="text"
-              name="tenantId"
-              value={formData.tenantId}
+            <select
+              name="tenantSubdomain"
+              value={formData.tenantSubdomain}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-              placeholder="ID du tenant (optionnel)"
-            />
+              required
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="">Sélectionner un tenant</option>
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.subdomain}>
+                  {tenant.name} ({tenant.subdomain})
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 px-4 py-3 rounded">
+          <div className="bg-destructive/20 border border-destructive text-destructive px-4 py-3 rounded">
             {error}
           </div>
         )}
 
+        {/* Buttons */}
         <div className="flex gap-2">
-          <button
+          <Button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex-1"
           >
             {loading ? "Création..." : "Créer"}
-          </button>
+          </Button>
           {onCancel && (
-            <button
+            <Button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+              variant="outline"
             >
               Annuler
-            </button>
+            </Button>
           )}
         </div>
       </form>

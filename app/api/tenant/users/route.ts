@@ -85,9 +85,25 @@ export async function PUT(req: NextRequest) {
     const oldUser = await prisma.user.findUnique({ where: { id: data.id } });
     if (!oldUser || oldUser.tenantId !== tenant.id)
       return NextResponse.json({ error: 'User not in tenant' }, { status: 400 });
-    const updatedUser = await prisma.user.update({ where: { id: data.id }, data });
+    
+    const { hash } = await import('bcryptjs');
+    const updateData: any = {
+      email: data.email || oldUser.email,
+      name: data.name !== undefined ? data.name : oldUser.name,
+      role: data.role || oldUser.role,
+    };
+
+    // Mettre à jour le mot de passe seulement s'il est fourni
+    if (data.password && data.password.length > 0) {
+      updateData.password = await hash(data.password, 10);
+    }
+
+    // Ignorer tenantSubdomain car on utilise déjà le tenant depuis l'URL
+    // Le tenant ne peut pas être changé via cette API
+    
+    const updatedUser = await prisma.user.update({ where: { id: data.id }, data: updateData });
     return NextResponse.json(updatedUser);
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 }

@@ -130,10 +130,10 @@ export async function protectRoute(
   subdomain?: string
 ): Promise<SessionUser> {
   const accessCheck = await checkRouteAccess(permission, subdomain);
+  const session = await getAuthSession();
 
   if (!accessCheck.allowed) {
     // Si l'utilisateur n'est pas authentifié, rediriger vers login
-    const session = await getAuthSession();
     if (!session) {
       redirect(permission.redirectTo || "/login");
     }
@@ -142,7 +142,6 @@ export async function protectRoute(
     notFound();
   }
 
-  const session = await getAuthSession();
   if (!session) {
     redirect(permission.redirectTo || "/login");
   }
