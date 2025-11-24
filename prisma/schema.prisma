@@ -26,8 +26,8 @@ model User {
   name      String?
   role      Role      @default(MEMBER)
   theme     String?   @default("default")
-  tenantId  String?   @db.VarChar(50)
-  tenant    Tenant?   @relation(fields: [tenantId], references: [id])
+  tenantId  String   @db.VarChar(50)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   accounts  Account[]

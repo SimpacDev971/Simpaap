@@ -2,17 +2,17 @@ import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma'
 
 async function main() {
-  // Créer tenant si nécessaire
-  const tenants = [{ name: 'test', subdomain: 'test' }]
-  for (const tenant of tenants) {
-    await prisma.tenant.upsert({
-      where: { subdomain: tenant.subdomain },
-      update: {},
-      create: tenant,
-    })
-  }
+  // Créer tenant "admin" si nécessaire
+  const adminTenant = await prisma.tenant.upsert({
+    where: { subdomain: 'admin' },
+    update: {},
+    create: {
+      name: 'Admin',
+      subdomain: 'admin',
+    },
+  })
 
-  // Créer superadmin
+  // Créer superadmin et le connecter au tenant "admin"
   const hash = await bcrypt.hash('admin1234', 10)
   await prisma.user.upsert({
     where: { email: 'njudes@simpac.fr' },
@@ -22,6 +22,7 @@ async function main() {
       password: hash,
       name: 'Nico',
       role: 'SUPERADMIN',
+      tenant: { connect: { id: adminTenant.id } }, // <--- obligatoire
     },
   })
 }

@@ -9,18 +9,18 @@ interface Tenant {
   subdomain: string;
 }
 
-interface User {
+interface UserWithTenant {
   id: string;
   email: string;
   password?: string;
   name?: string | null;
   role: "ADMIN" | "MEMBER" | "SUPERADMIN";
-  tenantId?: string | null;
-  tenant?: { subdomain: string } | null;
+  tenantId: string; // tenantId obligatoire
+  tenant: { subdomain: string; name: string }; // tenant obligatoire
 }
 
 interface UpdateUserProps {
-  user: User;
+  user: UserWithTenant;
   onSuccess?: () => void;
   onCancel?: () => void;
   tenantSubdomain?: string; // Le subdomain actuel (pour savoir si on est sur admin ou non)
@@ -33,13 +33,14 @@ export default function UpdateUser({
   tenantSubdomain,
 }: UpdateUserProps) {
   const isAdminSubdomain = tenantSubdomain === "admin";
-  const [formData, setFormData] = useState<Partial<User & { tenantSubdomain: string }>>({
+  const [formData, setFormData] = useState<Partial<UserWithTenant & { tenantSubdomain: string }>>({
     email: user.email,
     password: "",
     name: user.name || "",
     role: user.role,
-    tenantSubdomain: user.tenant?.subdomain || tenantSubdomain || "",
+    tenantSubdomain: user.tenant.subdomain,
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -67,9 +68,9 @@ export default function UpdateUser({
       password: "",
       name: user.name || "",
       role: user.role,
-      tenantSubdomain: user.tenant?.subdomain || tenantSubdomain || "",
+      tenantSubdomain: user.tenant.subdomain,
     });
-  }, [user, tenantSubdomain]);
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -89,18 +90,18 @@ export default function UpdateUser({
         role: formData.role,
       };
 
-      // Ne mettre à jour le mot de passe que s'il est fourni
       if (formData.password && formData.password.length > 0) {
         payload.password = formData.password;
       }
 
-      // Ajouter tenantSubdomain si on est sur admin, sinon utiliser le subdomain actuel
       if (isAdminSubdomain) {
-        if (formData.tenantSubdomain) {
-          payload.tenantSubdomain = formData.tenantSubdomain;
+        if (!formData.tenantSubdomain) {
+          setError("Veuillez sélectionner un tenant");
+          setLoading(false);
+          return;
         }
+        payload.tenantSubdomain = formData.tenantSubdomain;
       } else {
-        // Si ce n'est pas admin, utiliser le subdomain actuel (ne peut pas changer)
         payload.tenantSubdomain = tenantSubdomain;
       }
 
@@ -131,6 +132,7 @@ export default function UpdateUser({
   return (
     <div className="bg-background rounded-lg shadow-lg p-6">
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Email */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Email *
@@ -145,6 +147,7 @@ export default function UpdateUser({
           />
         </div>
 
+        {/* Mot de passe */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Nouveau mot de passe (laisser vide pour ne pas changer)
@@ -159,6 +162,7 @@ export default function UpdateUser({
           />
         </div>
 
+        {/* Nom */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Nom
@@ -166,12 +170,13 @@ export default function UpdateUser({
           <input
             type="text"
             name="name"
-            value={formData.name}
+            value={formData.name || ""}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
         </div>
 
+        {/* Rôle */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Rôle *
@@ -188,7 +193,7 @@ export default function UpdateUser({
           </select>
         </div>
 
-        {/* Tenant - Liste déroulante si admin, masqué sinon */}
+        {/* Tenant */}
         {isAdminSubdomain && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -218,19 +223,11 @@ export default function UpdateUser({
         )}
 
         <div className="flex gap-2">
-          <Button
-            type="submit"
-            disabled={loading}
-            className="flex-1"
-          >
+          <Button type="submit" disabled={loading} className="flex-1">
             {loading ? "Mise à jour..." : "Mettre à jour"}
           </Button>
           {onCancel && (
-            <Button
-              type="button"
-              onClick={onCancel}
-              variant="outline"
-            >
+            <Button type="button" onClick={onCancel} variant="outline">
               Annuler
             </Button>
           )}

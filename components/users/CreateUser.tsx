@@ -1,6 +1,5 @@
 "use client";
 
-import { User } from "@/app/components1/UserForm";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
@@ -8,6 +7,15 @@ interface Tenant {
   id: string;
   name: string;
   subdomain: string;
+}
+
+interface UserWithTenant {
+  id: string;
+  email: string;
+  name?: string | null;
+  role: "SUPERADMIN" | "ADMIN" | "MEMBER";
+  tenantId: string;
+  tenant: { subdomain: string; name: string }; // tenant obligatoire
 }
 
 interface CreateUserProps {
@@ -23,20 +31,22 @@ export default function CreateUser({
   subdomain,
   defaultRole = "MEMBER",
 }: CreateUserProps) {
-  const [formData, setFormData] = useState<Partial<User & { tenantSubdomain: string }>>({
+  const [formData, setFormData] = useState<Partial<UserWithTenant & { password: string; tenantSubdomain: string }>>({
     email: "",
     password: "",
     name: "",
     role: defaultRole,
-    tenantSubdomain: subdomain === "admin" ? "" : subdomain, // Par défaut le subdomain actuel sauf si admin
+    tenantId: "",
+    tenantSubdomain: subdomain === "admin" ? "" : subdomain,
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [tenantName, setTenantName] = useState(subdomain);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const isAdminSubdomain = subdomain === "admin";
 
-  // Fetch tenants si on est sur admin
+  // Fetch tenants si admin, sinon récupérer le tenant actuel
   useEffect(() => {
     if (isAdminSubdomain) {
       const fetchTenants = async () => {
@@ -51,13 +61,13 @@ export default function CreateUser({
       };
       fetchTenants();
     } else {
-      // Si ce n'est pas admin, récupérer le nom du tenant actuel
       const fetchTenantName = async () => {
         try {
           const res = await fetch(`/api/tenant?subdomain=${subdomain}`);
           if (!res.ok) throw new Error("Tenant introuvable");
           const data = await res.json();
           setTenantName(data.name);
+          setFormData((prev) => ({ ...prev, tenantId: data.id, tenantSubdomain: subdomain }));
         } catch (err: any) {
           setError(err.message || "Impossible de récupérer le tenant");
         }
@@ -84,19 +94,19 @@ export default function CreateUser({
         role: formData.role,
       };
 
-      // Ajouter tenantSubdomain si on est sur admin, sinon utiliser le subdomain actuel
       if (isAdminSubdomain) {
         if (formData.tenantSubdomain) {
           payload.tenantSubdomain = formData.tenantSubdomain;
+        } else {
+          setError("Veuillez sélectionner un tenant");
+          setLoading(false);
+          return;
         }
       } else {
-        // Si ce n'est pas admin, utiliser le subdomain actuel
         payload.tenantSubdomain = subdomain;
       }
 
-      const endpoint = isAdminSubdomain
-        ? "/api/admin/users"
-        : `/api/tenant/users?subdomain=${subdomain}`;
+      const endpoint = isAdminSubdomain ? "/api/admin/users" : `/api/tenant/users?subdomain=${subdomain}`;
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -107,16 +117,19 @@ export default function CreateUser({
       if (!res.ok) {
         const { error: apiError } = await res.json();
         setError(apiError || "Erreur lors de la création.");
+        setLoading(false);
         return;
       }
 
       if (onSuccess) onSuccess();
+
       // Reset form
       setFormData({
         email: "",
         password: "",
         name: "",
         role: defaultRole,
+        tenantId: "",
         tenantSubdomain: isAdminSubdomain ? "" : subdomain,
       });
     } catch (err: any) {
@@ -170,7 +183,7 @@ export default function CreateUser({
           <input
             type="text"
             name="name"
-            value={formData.name}
+            value={formData.name || ""}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
             placeholder="Nom complet"
@@ -194,7 +207,7 @@ export default function CreateUser({
           </select>
         </div>
 
-        {/* Tenant - Liste déroulante si admin, masqué sinon */}
+        {/* Tenant */}
         {isAdminSubdomain && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -225,19 +238,11 @@ export default function CreateUser({
 
         {/* Buttons */}
         <div className="flex gap-2">
-          <Button
-            type="submit"
-            disabled={loading}
-            className="flex-1"
-          >
+          <Button type="submit" disabled={loading} className="flex-1">
             {loading ? "Création..." : "Créer"}
           </Button>
           {onCancel && (
-            <Button
-              type="button"
-              onClick={onCancel}
-              variant="outline"
-            >
+            <Button type="button" onClick={onCancel} variant="outline">
               Annuler
             </Button>
           )}

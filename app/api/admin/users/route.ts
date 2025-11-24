@@ -190,23 +190,24 @@ export async function GET(req: NextRequest) {
 
     console.log(session.user)
     let users = [];
-    if (session.user.tenantSlug == 'admin') {
+    if (session.user.tenantSlug === 'admin') {
       users = await prisma.user.findMany({
         include: { tenant: true },
         orderBy: { tenantId: 'desc' },
       });
     } else {
       users = await prisma.user.findMany({
-        where: {
-          tenant: {
-            is: { name: session.user.tenantSlug } // <- "is" pour relation 1:1
-          }
-        },
+        where: session.user.tenantSlug
+          ? {
+              tenant: {
+                is: { name: session.user.tenantSlug },
+              },
+            }
+          : undefined,
         include: { tenant: true },
-        orderBy: { tenant: { name: "asc" } }
-      })
+        orderBy: { tenant: { name: 'asc' } },
+      });
     }
-
     return NextResponse.json(users, { status: 200 });
   } catch (err: any) {
     console.error('Erreur récupération utilisateurs:', err);

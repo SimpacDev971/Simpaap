@@ -12,13 +12,17 @@ import UpdateUser from "@/components/users/UpdateUser";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
-interface User {
+// Type utilisateur avec tenant obligatoire
+export interface UserWithTenant {
   id: string;
   email: string;
   name?: string | null;
   role: "SUPERADMIN" | "ADMIN" | "MEMBER";
-  tenantId?: string | null;
-  tenant?: { name: string } | null;
+  tenantId: string;
+  tenant: {
+    subdomain: string;
+    name: string;
+  };
 }
 
 interface UsersCrudProps {
@@ -26,21 +30,22 @@ interface UsersCrudProps {
 }
 
 export default function UsersCrud({ tenantSubdomain }: UsersCrudProps) {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserWithTenant[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<UserWithTenant | null>(null);
+  const [deletingUser, setDeletingUser] = useState<UserWithTenant | null>(null);
 
   const { data: session } = useSession();
+
   const fetchUsers = async () => {
     setLoading(true);
-    setError(""); // reset error
+    setError("");
     try {
       const res = await fetch(`/api/admin/users?tenant=${tenantSubdomain}`);
       if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
-      const data: User[] = await res.json();
+      const data: UserWithTenant[] = await res.json();
       setUsers(data);
     } catch (err: any) {
       setError(err.message || "Erreur lors du chargement des utilisateurs");
@@ -71,7 +76,7 @@ export default function UsersCrud({ tenantSubdomain }: UsersCrudProps) {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle></DialogTitle>
+              <DialogTitle>Créer un utilisateur</DialogTitle>
             </DialogHeader>
             <CreateUser subdomain={tenantSubdomain} onSuccess={handleSuccess} onCancel={() => setShowCreate(false)} />
           </DialogContent>
@@ -81,20 +86,25 @@ export default function UsersCrud({ tenantSubdomain }: UsersCrudProps) {
       {/* Modals */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
         <DialogContent>
-            <DialogHeader>
-              <DialogTitle></DialogTitle>
-            </DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Modifier utilisateur</DialogTitle>
+          </DialogHeader>
           {editingUser && (
-            <UpdateUser user={editingUser} tenantSubdomain={tenantSubdomain} onSuccess={handleSuccess} onCancel={() => setEditingUser(null)} />
+            <UpdateUser
+              user={editingUser}
+              tenantSubdomain={tenantSubdomain}
+              onSuccess={handleSuccess}
+              onCancel={() => setEditingUser(null)}
+            />
           )}
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)}>
         <DialogContent>
-            <DialogHeader>
-              <DialogTitle></DialogTitle>
-            </DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Supprimer utilisateur</DialogTitle>
+          </DialogHeader>
           {deletingUser && (
             <DeleteUser
               userId={deletingUser.id}
@@ -116,7 +126,9 @@ export default function UsersCrud({ tenantSubdomain }: UsersCrudProps) {
               <th className="p-3 text-left text-muted-foreground">Email</th>
               <th className="p-3 text-left text-muted-foreground">Nom</th>
               <th className="p-3 text-left text-muted-foreground">Rôle</th>
-              {session?.user.role == "SUPERADMIN" && (<th className="p-3 text-left text-muted-foreground">Client</th>)}
+              {session?.user.role === "SUPERADMIN" && (
+                <th className="p-3 text-left text-muted-foreground">Client</th>
+              )}
               <th className="p-3 text-right text-muted-foreground">Actions</th>
             </tr>
           </thead>
@@ -130,7 +142,7 @@ export default function UsersCrud({ tenantSubdomain }: UsersCrudProps) {
                     {user.role}
                   </span>
                 </td>
-                {session?.user.role == "SUPERADMIN" && (<td className="p-3">{user.tenant?.name || "-"}</td>)}
+                {session?.user.role === "SUPERADMIN" && <td className="p-3">{user.tenant.name}</td>}
                 <td className="text-right p-3">
                   <Button
                     onClick={() => setEditingUser(user)}
@@ -156,8 +168,14 @@ export default function UsersCrud({ tenantSubdomain }: UsersCrudProps) {
         </table>
       )}
 
-      {!loading && users.length === 0 && <p className="text-center text-muted-foreground">Aucun utilisateur trouvé</p>}
-      {error && <div className="bg-destructive/20 border border-destructive text-destructive px-4 py-3 rounded">{error}</div>}
+      {!loading && users.length === 0 && (
+        <p className="text-center text-muted-foreground">Aucun utilisateur trouvé</p>
+      )}
+      {error && (
+        <div className="bg-destructive/20 border border-destructive text-destructive px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

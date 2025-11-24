@@ -1,4 +1,4 @@
-import { UserRole } from "@/lib/auth/types/auth";
+import { UserRole } from "@/lib/types/auth";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../app/api/auth/[...nextauth]/route";
 

@@ -1,9 +1,9 @@
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '../../auth/[...nextauth]/route';
 
-function isAdmin(session) {
+function isAdmin(session: Session | null) {
   return session && (session.user.role === 'ADMIN' || session.user.role === 'SUPERADMIN');
 }
 
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   if (!tenant) return NextResponse.json({ error: 'Invalid tenant' }, { status: 400 });
   
   // Vérifier que l'admin appartient bien à ce tenant (sauf SUPERADMIN)
-  if (session.user.role === 'ADMIN' && session.user.tenantSlug !== tenant.subdomain) {
+  if (session?.user.role === 'ADMIN' && session.user.tenantSlug !== tenant.subdomain) {
     return NextResponse.json({ error: 'Forbidden: You can only access your own tenant' }, { status: 403 });
   }
   
@@ -124,7 +124,10 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'User not in tenant' }, { status: 400 });
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 });
   }
 }
