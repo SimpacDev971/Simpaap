@@ -13,27 +13,27 @@ let cachedTenants: string[] | null = null;
 let cacheTimestamp: number | null = null;
 const CACHE_TTL = 60 * 1000; // 1 minute
 
-async function getTenants(req: NextRequest) {
+async function getTenants(): Promise<string[]> {
   const now = Date.now();
 
+  // Retourner le cache si valide
   if (cachedTenants && cacheTimestamp && now - cacheTimestamp < CACHE_TTL) {
     return cachedTenants;
   }
 
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_URL || req.nextUrl.origin;
-    const res = await fetch(`${baseUrl}/api/tenant`);
-
+    const res = await fetch(`${process.env.NEXT_PUBLIC_URL}/api/tenant`);
     if (!res.ok) throw new Error("Failed to fetch tenants");
 
-    const data = await res.json();
-    cachedTenants = data.map((t: { subdomain: string }) => t.subdomain);
+    const data: { subdomain: string }[] = await res.json();
+    cachedTenants = data.map(t => t.subdomain);
     cacheTimestamp = now;
-
     return cachedTenants;
   } catch (err) {
-    if (process.env.NODE_ENV === "development") console.error("⚠️ Unable to fetch tenants:", err);
-    return cachedTenants || []; // fallback sur cache
+    console.error("⚠️ Unable to fetch tenants:", err);
+    // fallback sur cache existant ou tableau vide
+    cachedTenants = cachedTenants || [];
+    return cachedTenants;
   }
 }
 
@@ -44,15 +44,18 @@ export async function middleware(req: NextRequest) {
   const MAIN_DOMAIN = process.env.NEXT_PUBLIC_MAIN_DOMAIN || "print.simp.ac";
 
   const isMainDomain =
-    hostname === MAIN_DOMAIN || hostname === `www.${MAIN_DOMAIN}` || hostname.startsWith("localhost");
+    hostname === MAIN_DOMAIN ||
+    hostname === `www.${MAIN_DOMAIN}` ||
+    hostname.startsWith("localhost");
 
   const subdomain = isMainDomain ? null : hostname.split(".")[0];
 
-  if (process.env.NODE_ENV === "development") {
+  /*if (process.env.NODE_ENV === "development") {
     console.log("📡 Host:", hostname, "🏷️ Subdomain:", subdomain);
-  }
+  }*/
+  console.log("📡 Host:", hostname, "🏷️ Subdomain:", subdomain);
 
-  const tenants = await getTenants(req);
+  const tenants = await getTenants();
 
   // ----------------------------
   // MAIN DOMAIN
