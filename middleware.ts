@@ -15,7 +15,7 @@ export async function middleware(req: NextRequest) {
   hostname = hostname.split(':')[0];
 
   // Define allowed domains (including main domain and localhost)
-  const allowedDomains = ["tudominio.ar", "www.tudominio.ar", "localhost"];
+  const allowedDomains = ["localhost","print.simp.ac"];
 
   // Check if the current hostname is in the list of allowed domains
   const isMainDomain = allowedDomains.includes(hostname);
