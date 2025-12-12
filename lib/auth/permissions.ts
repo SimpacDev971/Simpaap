@@ -1,5 +1,4 @@
-import { UserRole } from "@/lib/types/auth";
-import { RoutePermission } from "@/lib/types/auth";
+import { RoutePermission, UserRole } from "@/lib/types/auth";
 
 /**
  * Configuration centralisée des permissions par route
@@ -10,31 +9,6 @@ import { RoutePermission } from "@/lib/types/auth";
 
 export const ROUTE_PERMISSIONS: Record<string, RoutePermission> = {
   // Routes admin globales (sans subdomain)
-  "/admin": {
-    allowedRoles: ["SUPERADMIN", "ADMIN"],
-    requireAuth: true,
-    errorMessage: "Accès refusé. Seuls les administrateurs peuvent accéder à cette page.",
-    redirectTo: "/login",
-  },
-  "/admin/users": {
-    allowedRoles: ["SUPERADMIN", "ADMIN"],
-    requireAuth: true,
-    errorMessage: "Accès refusé. Seuls les administrateurs peuvent gérer les utilisateurs.",
-    redirectTo: "/login",
-  },
-  "/admin/users/create": {
-    allowedRoles: ["SUPERADMIN"],
-    requireAuth: true,
-    errorMessage: "Accès refusé. Seuls les super administrateurs peuvent créer des utilisateurs.",
-    redirectTo: "/login",
-  },
-  "/admin/tenants": {
-    allowedRoles: ["SUPERADMIN"],
-    requireAuth: true,
-    errorMessage: "Accès refusé. Seuls les super administrateurs peuvent gérer les tenants.",
-    redirectTo: "/login",
-  },
-
   // Routes admin avec subdomain
   "/[subdomain]/admin": {
     allowedRoles: ["SUPERADMIN", "ADMIN"],

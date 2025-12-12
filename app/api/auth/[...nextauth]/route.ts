@@ -43,13 +43,22 @@ export const authOptions: AuthOptions = {
   ],
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user,trigger,session }) {
       if (user) {
         token.id = user.id;
         token.role = user.role;
         token.tenantSlug = user.tenantSlug;
         token.theme = user.theme;
       }
+      // 2. Quand on appelle update() → rafraîchir le token depuis la DB
+  if (trigger === "update") {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: token.id },
+      select: { theme: true },
+    });
+
+    token.theme = dbUser?.theme ?? token.theme;
+  }
       return token;
     },
 

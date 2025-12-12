@@ -1,6 +1,5 @@
 import SessionClientProvider from "@/app/SessionClientProvider";
 import AppLayout from "@/components/layout/AppLayout";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -18,14 +17,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <SessionClientProvider>
     <html lang="fr" suppressHydrationWarning>
-      <body className={`bg-background text-foreground min-h-screen`}>
-        <ThemeProvider>
+      <body className={`${inter.className} bg-background text-foreground min-h-screen`}>
+        <SessionClientProvider>
           <AppLayout>{children}</AppLayout>
-        </ThemeProvider>
+        </SessionClientProvider>
       </body>
     </html>
-  </SessionClientProvider>
   );
 }

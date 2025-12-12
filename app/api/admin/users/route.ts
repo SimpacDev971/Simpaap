@@ -200,7 +200,7 @@ export async function GET(req: NextRequest) {
         where: session.user.tenantSlug
           ? {
               tenant: {
-                is: { name: session.user.tenantSlug },
+                is: { subdomain: session.user.tenantSlug },
               },
             }
           : undefined,

@@ -2,14 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
-import { getThemeForUser, ThemeMode } from "@/lib/theme";
+import { applyTheme, getThemeForUser, ThemeMode } from "@/lib/theme";
 import { Droplet, Palette } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
@@ -49,6 +49,7 @@ export function ThemeSelector() {
       await update();
       router.refresh();
       setOpen(false);
+      applyTheme(getThemeForUser(themeName),currentMode)
     } catch (error) {
       console.error("Erreur changement de thème:", error);
     } finally {

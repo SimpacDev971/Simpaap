@@ -9,7 +9,6 @@ export default async function SubdomainPage({ params }: { params: Promise<{ subd
   
   const access: UserAccess = await getUserAccess(subdomain);
   const { isLogged, isAdmin, isSameTenant } = access;
-  console.log(access);
   
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -31,14 +30,14 @@ export default async function SubdomainPage({ params }: { params: Promise<{ subd
           </p>
           <div className="flex gap-4 justify-center">
             {!isLogged && (
-              <Link href="/login" passHref>
+              <Link href="/login" prefetch={true}>
                 <Button variant="default" size="lg">
                   Se connecter
                 </Button>
               </Link>
             )}
             {isLogged && isAdmin && isSameTenant && (
-              <Link href="/admin" passHref>
+              <Link href="/admin" prefetch={true}>
                 <Button variant="secondary" size="lg">
                   Administration
                 </Button>

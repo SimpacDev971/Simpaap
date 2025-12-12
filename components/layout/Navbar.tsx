@@ -7,18 +7,27 @@ import { Button } from "@/components/ui/button";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 
-export default function Navbar({ tenantSubdomain }: { tenantSubdomain: string }) {
-  const { data: session } = useSession();
+interface NavbarProps {
+  tenantSubdomain: string | null;
+}
+
+export default function Navbar({ tenantSubdomain }: NavbarProps) {
+  const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-
+  
   const handleLogout = async () => {
     await signOut({ redirect: false });
     router.push("/login");
   };
 
+  const displayTenantName = tenantSubdomain?.toUpperCase() === "DEFAULT"
+  ? "SIMPAAP"
+  : tenantSubdomain?.toUpperCase() || "SIMPAAP";
+
+
   return (
-    <nav>
+    <nav className="border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
@@ -27,7 +36,7 @@ export default function Navbar({ tenantSubdomain }: { tenantSubdomain: string })
               onClick={() => router.push("/")}
               className="px-0 py-0 h-auto text-2xl font-bold"
             >
-              {tenantSubdomain.toLocaleUpperCase()}
+              {displayTenantName}
             </Button>
             {session && (
               <div className="ml-10 flex items-center space-x-4">
@@ -43,18 +52,20 @@ export default function Navbar({ tenantSubdomain }: { tenantSubdomain: string })
           </div>
 
           <div className="flex items-center space-x-4">
-            {session ? (
+            {status === "loading" ? (
+              <div className="h-8 w-32 bg-muted animate-pulse rounded" />
+            ) : session ? (
               <>
                 <div className="flex items-center space-x-2">
-                  <span>
+                  <span className="text-sm font-medium">
                     {session.user?.name || session.user?.email}
                   </span>
                   <Badge variant="secondary">
                     {session.user?.role}
                   </Badge>
                 </div>
-                <ModeToggle />
                 <ThemeSelector />
+                <ModeToggle />
                 <Button
                   variant="destructive"
                   onClick={handleLogout}

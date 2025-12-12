@@ -9,14 +9,13 @@ datasource db {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  subdomain String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relation : un tenant a plusieurs utilisateurs
-  users User[]
+  id                 String               @id @default(cuid())
+  name               String
+  subdomain          String               @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  users              User[]
+  tenant_application tenant_application[]
 }
 
 model User {
@@ -25,19 +24,13 @@ model User {
   password  String
   name      String?
   role      Role      @default(MEMBER)
-  theme     String?   @default("default")
-  tenantId  String   @db.VarChar(50)
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId  String    @db.VarChar(50)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  theme     String?   @default("default")
   accounts  Account[]
   sessions  Session[]
-}
-
-enum Role {
-  SUPERADMIN // gère tous les tenants
-  ADMIN // gère son tenant et les membres
-  MEMBER // simple membre du tenant
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
 }
 
 model PasswordResetToken {
@@ -47,23 +40,22 @@ model PasswordResetToken {
   expiresAt DateTime
 }
 
-// NextAuth (Prisma Adapter) models
 model Account {
   id                String   @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?  @db.Text
-  access_token      String?  @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?  @db.Text
+  id_token          String?
   session_state     String?
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -72,10 +64,10 @@ model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expires      DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -84,4 +76,36 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model Application {
+  id                 Int                  @id(map: "application_pkey") @default(autoincrement())
+  categorieid        Int
+  nom                String               @db.VarChar(255)
+  description        String?
+  url                String?              @db.VarChar(500)
+  categorie          categorie            @relation(fields: [categorieid], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_categorie")
+  tenant_application tenant_application[]
+}
+
+model categorie {
+  id          Int           @id @default(autoincrement())
+  nom         String        @db.VarChar(255)
+  description String?
+  Application Application[]
+}
+
+model tenant_application {
+  tenantid      String
+  applicationid Int
+  Application   Application @relation(fields: [applicationid], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_application")
+  Tenant        Tenant      @relation(fields: [tenantid], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tenant")
+
+  @@id([tenantid, applicationid])
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  MEMBER
 }

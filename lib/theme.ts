@@ -7,6 +7,8 @@ export type ThemeMode = "light" | "dark";
 export interface ThemePalette {
   primary: string;
   primaryForeground: string;
+  outline: string;
+  outlineForeground: string;
   secondary: string;
   secondaryForeground: string;
   accent: string;
@@ -47,6 +49,8 @@ export interface FullTheme extends ThemeDefinition, ThemeMeta {}
 const baseLight: ThemePalette = {
   primary: "222.2 47.4% 11.2%",
   primaryForeground: "210 40% 98%",
+  outline: "222.2 47.4% 11.2%",
+  outlineForeground: "210 40% 98%",
   secondary: "210 40% 96.1%",
   secondaryForeground: "222.2 47.4% 11.2%",
   accent: "210 40% 96.1%",
@@ -69,6 +73,8 @@ const baseLight: ThemePalette = {
 const baseDark: ThemePalette = {
   primary: "210 40% 98%",
   primaryForeground: "222.2 47.4% 11.2%",
+  outline: "210 40% 98%",
+  outlineForeground: "222.2 47.4% 11.2%",
   secondary: "217.2 32.6% 17.5%",
   secondaryForeground: "210 40% 98%",
   accent: "217.2 32.6% 17.5%",
@@ -229,6 +235,8 @@ export function applyTheme(theme: FullTheme, mode: ThemeMode = "light") {
   const cssMapping: Record<keyof ThemePalette, string> = {
     primary: "primary",
     primaryForeground: "primary-foreground",
+    outline: "outline",
+    outlineForeground: "outline-foreground",
     secondary: "secondary",
     secondaryForeground: "secondary-foreground",
     accent: "accent",

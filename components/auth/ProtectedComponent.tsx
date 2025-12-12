@@ -1,10 +1,10 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { hasRoleAccess } from "@/lib/auth/permissions";
+import { RoutePermission, SessionUser } from "@/lib/types/auth";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { SessionUser, RoutePermission } from "@/lib/types/auth";
-import { hasRoleAccess } from "@/lib/auth/permissions";
+import { ReactNode, useEffect, useState } from "react";
 
 /**
  * Props pour le composant ProtectedComponent
