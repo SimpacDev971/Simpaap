@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
+    console.log('Start API TEnant List')
     // Récupère uniquement les subdomains (léger et rapide)
     const tenants = await prisma.tenant.findMany({
       select: {
@@ -13,6 +14,7 @@ export async function GET() {
 
     // Retourne un tableau de strings
     const subdomains = tenants.map((t: { subdomain: any; }) => t.subdomain);
+    console.log(subdomains.join(','))
 
     return NextResponse.json({
       success: true,

@@ -32,6 +32,7 @@ async function refreshAllTenants(baseUrl: string): Promise<Set<string>> {
   try {
     console.log("🔄 Refreshing all tenants from DB...");
     // ⚠️ Assurez-vous que cette route est publique et ne nécessite pas d'authentification
+    console.log("baseUrl : ",baseUrl)
     const response = await fetch(`${baseUrl}/api/tenant/list`);
     
     if (response.ok) {
