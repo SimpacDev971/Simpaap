@@ -2,15 +2,17 @@
 
 import CreateTenant from "@/components/tenants/CreateTenant";
 import DeleteTenant from "@/components/tenants/DeleteTenant";
-import { useEffect, useState } from "react";
+import TenantParams from "@/components/tenants/TenantParams";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog";
+import { Settings } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface Tenant {
   id: string;
@@ -25,6 +27,7 @@ export default function TenantsCrud() {
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [deletingTenant, setDeletingTenant] = useState<Tenant | null>(null);
+  const [paramsTenant, setParamsTenant] = useState<Tenant | null>(null);
 
   const fetchTenants = async () => {
     setLoading(true);
@@ -34,8 +37,9 @@ export default function TenantsCrud() {
       if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
       const data: Tenant[] = await res.json();
       setTenants(data);
-    } catch (err: any) {
-      setError(err.message || "Erreur lors du chargement des tenants");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur lors du chargement des tenants";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -49,6 +53,7 @@ export default function TenantsCrud() {
     fetchTenants();
     setShowCreate(false);
     setDeletingTenant(null);
+    setParamsTenant(null);
   };
 
   return (
@@ -58,22 +63,22 @@ export default function TenantsCrud() {
         <h2 className="text-2xl font-semibold text-foreground">Gestion des tenants</h2>
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogTrigger asChild>
-            <Button>+ Créer un tenant</Button>
+            <Button>+ Créer un client</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Créer un tenant</DialogTitle>
+              <DialogTitle>Créer un client</DialogTitle>
             </DialogHeader>
             <CreateTenant onSuccess={handleSuccess} onCancel={() => setShowCreate(false)} />
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Modals */}
+      {/* Delete Modal */}
       <Dialog open={!!deletingTenant} onOpenChange={(open) => !open && setDeletingTenant(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Supprimer le tenant</DialogTitle>
+            <DialogTitle>Supprimer le client</DialogTitle>
           </DialogHeader>
           {deletingTenant && (
             <DeleteTenant
@@ -81,6 +86,23 @@ export default function TenantsCrud() {
               tenantName={deletingTenant.name}
               onSuccess={handleSuccess}
               onCancel={() => setDeletingTenant(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Parameters Modal */}
+      <Dialog open={!!paramsTenant} onOpenChange={(open) => !open && setParamsTenant(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Paramètres du client</DialogTitle>
+          </DialogHeader>
+          {paramsTenant && (
+            <TenantParams
+              tenantId={paramsTenant.id}
+              tenantName={paramsTenant.name}
+              onSuccess={handleSuccess}
+              onCancel={() => setParamsTenant(null)}
             />
           )}
         </DialogContent>
@@ -105,10 +127,19 @@ export default function TenantsCrud() {
                 <td className="p-3">{tenant.name}</td>
                 <td className="p-3">{tenant.subdomain}</td>
                 <td className="p-3">{new Date(tenant.createdAt).toLocaleDateString("fr-FR")}</td>
-                <td className="text-right p-3">
+                <td className="text-right p-3 space-x-2">
+                  <Button
+                    onClick={() => setParamsTenant(tenant)}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    Paramètres
+                  </Button>
                   <Button
                     onClick={() => setDeletingTenant(tenant)}
                     variant="destructive"
+                    size="sm"
                   >
                     Supprimer
                   </Button>

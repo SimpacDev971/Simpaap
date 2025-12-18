@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__ide__getDiagnostics",
+      "Bash(pnpm prisma generate:*)",
+      "Bash(pnpm prisma db push:*)"
+    ]
+  }
+}

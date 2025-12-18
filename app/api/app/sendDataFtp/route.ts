@@ -1,5 +1,8 @@
 // app/api/upload-mail/route.ts
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import prisma from '@/lib/prisma';
 import * as ftp from 'basic-ftp';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { Readable } from 'stream';
 
@@ -27,6 +30,10 @@ export async function POST(request: NextRequest) {
   const client = new ftp.Client();
   client.ftp.verbose = VERBOSE_FTP;
 
+  // Get session for print_item creation
+  const session = await getServerSession(authOptions);
+  let printItemId: string | null = null;
+
   try {
       // Récupération du formData
       const formData = await request.formData();
@@ -46,6 +53,29 @@ export async function POST(request: NextRequest) {
 
       if (pdfFiles.length === 0) {
           return NextResponse.json({ error: "Aucun fichier PDF reçu" }, { status: 400 });
+      }
+
+      // Create print_item record if user is authenticated
+      if (session?.user) {
+          const tenantSlug = session.user.tenantSlug;
+          if (tenantSlug) {
+              const tenant = await prisma.tenant.findUnique({
+                  where: { subdomain: tenantSlug },
+              });
+
+              if (tenant) {
+                  const printItem = await prisma.print_item.create({
+                      data: {
+                          tenantId: tenant.id,
+                          userId: session.user.id,
+                          rawData: metadata,
+                          status: 'pending',
+                      },
+                  });
+                  printItemId = printItem.id;
+                  console.log(`✓ print_item created: ${printItemId}`);
+              }
+          }
       }
 
       // Définition du dépôt FTP avec uniqueKey si présent
@@ -96,16 +126,39 @@ export async function POST(request: NextRequest) {
 
       client.close();
 
+      // Update print_item status to 'sent' on success
+      if (printItemId) {
+          await prisma.print_item.update({
+              where: { id: printItemId },
+              data: {
+                  status: 'sent',
+                  sendAt: new Date(),
+              },
+          });
+          console.log(`✓ print_item updated to sent: ${printItemId}`);
+      }
+
       return NextResponse.json({
           success: true,
           depositId: SUB_FOLDER ? depositId : null,
           ftpPath: depositDir,
           files: pdfFiles.map(f => `${f.id}.pdf`),
+          printItemId,
       });
-  } catch (error: any) {
+  } catch (error: unknown) {
       console.error("Erreur FTP:", error);
       try { client.close(); } catch {}
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+
+      // Update print_item status to 'failed' on error
+      if (printItemId) {
+          await prisma.print_item.update({
+              where: { id: printItemId },
+              data: { status: 'failed' },
+          });
+      }
+
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 

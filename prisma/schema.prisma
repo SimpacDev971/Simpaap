@@ -9,28 +9,35 @@ datasource db {
 }
 
 model Tenant {
-  id                 String               @id @default(cuid())
-  name               String
-  subdomain          String               @unique
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  users              User[]
-  tenant_application tenant_application[]
+  id                    String                  @id @default(cuid())
+  name                  String
+  subdomain             String                  @unique
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  users                 User[]
+  tenant_application    tenant_application[]
+  tenant_print_color    tenant_print_color[]
+  tenant_print_side     tenant_print_side[]
+  tenant_envelope_type  tenant_envelope_type[]
+  tenant_postage_type   tenant_postage_type[]
+  tenant_postage_speed  tenant_postage_speed[]
+  print_items           print_item[]
 }
 
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  password  String
-  name      String?
-  role      Role      @default(MEMBER)
-  tenantId  String    @db.VarChar(50)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  theme     String?   @default("default")
-  accounts  Account[]
-  sessions  Session[]
-  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  id          String       @id @default(cuid())
+  email       String       @unique
+  password    String
+  name        String?
+  role        Role         @default(MEMBER)
+  tenantId    String       @db.VarChar(50)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  theme       String?      @default("default")
+  accounts    Account[]
+  sessions    Session[]
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  print_items print_item[]
 }
 
 model PasswordResetToken {
@@ -108,4 +115,132 @@ enum Role {
   SUPERADMIN
   ADMIN
   MEMBER
+}
+
+// ==========================================
+// Print Options Models (Global)
+// ==========================================
+
+model print_color {
+  id                 Int                  @id @default(autoincrement())
+  value              String               @unique @db.VarChar(50)
+  label              String               @db.VarChar(255)
+  isActive           Boolean              @default(true)
+  sortOrder          Int                  @default(0)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  tenant_print_color tenant_print_color[]
+}
+
+model print_side {
+  id                Int                 @id @default(autoincrement())
+  value             String              @unique @db.VarChar(50)
+  label             String              @db.VarChar(255)
+  isActive          Boolean             @default(true)
+  sortOrder         Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  tenant_print_side tenant_print_side[]
+}
+
+model envelope_type {
+  id                   Int                    @id @default(autoincrement())
+  value                String                 @unique @db.VarChar(50)
+  label                String                 @db.VarChar(255)
+  description          String?
+  isActive             Boolean                @default(true)
+  sortOrder            Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  tenant_envelope_type tenant_envelope_type[]
+}
+
+model postage_type {
+  id                  Int                   @id @default(autoincrement())
+  value               String                @unique @db.VarChar(50)
+  label               String                @db.VarChar(255)
+  isActive            Boolean               @default(true)
+  sortOrder           Int                   @default(0)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  tenant_postage_type tenant_postage_type[]
+}
+
+model postage_speed {
+  id                   Int                    @id @default(autoincrement())
+  value                String                 @unique @db.VarChar(50)
+  label                String                 @db.VarChar(255)
+  isActive             Boolean                @default(true)
+  sortOrder            Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  tenant_postage_speed tenant_postage_speed[]
+}
+
+// ==========================================
+// Tenant-PrintOption Join Tables
+// ==========================================
+
+model tenant_print_color {
+  tenantId     String
+  printColorId Int
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  print_color  print_color @relation(fields: [printColorId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, printColorId])
+}
+
+model tenant_print_side {
+  tenantId    String
+  printSideId Int
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  print_side  print_side @relation(fields: [printSideId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, printSideId])
+}
+
+model tenant_envelope_type {
+  tenantId       String
+  envelopeTypeId Int
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  envelope_type  envelope_type @relation(fields: [envelopeTypeId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, envelopeTypeId])
+}
+
+model tenant_postage_type {
+  tenantId      String
+  postageTypeId Int
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  postage_type  postage_type @relation(fields: [postageTypeId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, postageTypeId])
+}
+
+model tenant_postage_speed {
+  tenantId       String
+  postageSpeedId Int
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  postage_speed  postage_speed @relation(fields: [postageSpeedId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, postageSpeedId])
+}
+
+// ==========================================
+// Print Item - Submission History/Audit Log
+// ==========================================
+
+model print_item {
+  id        String    @id @default(cuid())
+  tenantId  String    @db.VarChar(50)
+  userId    String    @db.VarChar(50)
+  createdAt DateTime  @default(now())
+  sendAt    DateTime?
+  status    String    @default("pending")
+  rawData   Json
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([userId])
 }

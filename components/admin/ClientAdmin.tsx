@@ -1,19 +1,21 @@
 "use client";
 
+import SimpaapCrud from "@/components/admin/simpaap/SimpaapCrud";
 import TenantsCrud from "@/components/admin/TenantsCrud";
 import UsersCrud from "@/components/admin/UsersCrud";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
 import { useState } from "react";
 
-type TabType = "users" | "tenants";
+type TabType = "users" | "tenants" | "simpaap";
 
 export default function ClientAdmin({ tenantSubdomain }: { tenantSubdomain: string }) {
   const [activeTab, setActiveTab] = useState<TabType>("users");
   const { data: session } = useSession();
 
-  // Afficher la tab "Tenants" seulement pour SUPERADMIN sur le subdomain admin
-  const showTenantsTab = tenantSubdomain === "admin" && session?.user?.role === "SUPERADMIN";
+  // Afficher les tabs SUPERADMIN seulement sur le subdomain admin
+  const isSuperAdmin = tenantSubdomain === "admin" && session?.user?.role === "SUPERADMIN";
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
@@ -26,14 +28,23 @@ export default function ClientAdmin({ tenantSubdomain }: { tenantSubdomain: stri
           >
             Utilisateurs
           </Button>
-          {showTenantsTab && (
-            <Button
-              variant={activeTab === "tenants" ? "secondary" : "ghost"}
-              onClick={() => setActiveTab("tenants")}
-              className={activeTab === "tenants" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground border-b-2 border-transparent"}
-            >
-              Tenants
-            </Button>
+          {isSuperAdmin && (
+            <>
+              <Button
+                variant={activeTab === "tenants" ? "secondary" : "ghost"}
+                onClick={() => setActiveTab("tenants")}
+                className={activeTab === "tenants" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground border-b-2 border-transparent"}
+              >
+                Clients
+              </Button>
+              <Button
+                variant={activeTab === "simpaap" ? "secondary" : "ghost"}
+                onClick={() => setActiveTab("simpaap")}
+                className={activeTab === "simpaap" ? "border-b-2 border-primary text-foreground" : "text-muted-foreground border-b-2 border-transparent"}
+              >
+                Simpaap
+              </Button>
+            </>
           )}
         </nav>
       </div>
@@ -41,7 +52,8 @@ export default function ClientAdmin({ tenantSubdomain }: { tenantSubdomain: stri
       {/* Contenu dynamique */}
       <div>
         {activeTab === "users" && <UsersCrud tenantSubdomain={tenantSubdomain} />}
-        {activeTab === "tenants" && showTenantsTab && <TenantsCrud />}
+        {activeTab === "tenants" && isSuperAdmin && <TenantsCrud />}
+        {activeTab === "simpaap" && isSuperAdmin && <SimpaapCrud />}
       </div>
     </div>
   );

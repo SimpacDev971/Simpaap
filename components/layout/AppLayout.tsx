@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { TenantApplicationsProvider } from "@/contexts/TenantApplicationsContext";
 import { useSubdomain } from "@/hooks/useSubdomain";
 import { SessionRefresh } from "@/lib/auth/SessionRefresh";
 import { ThemeMode, applyTheme, getThemeForUser } from "@/lib/theme";
@@ -15,7 +16,7 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
-const publicPages = ["/", "/login", "/forgot-password", "/reset-password"];
+const publicPages = ["/login", "/forgot-password", "/reset-password"];
 
 // Composant interne pour gérer le thème (utilisé uniquement pour les users connectés)
 function AuthenticatedLayout({ children, subdomain }: { children: ReactNode; subdomain: string | null }) {
@@ -77,10 +78,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
   // Pages privées : ThemeProvider uniquement pour les users authentifiés
   return (
     <ThemeProvider>
-      <SessionRefresh />
-      <AuthenticatedLayout subdomain={subdomain}>
-        {children}
-      </AuthenticatedLayout>
+      <TenantApplicationsProvider>
+        <SessionRefresh />
+        <AuthenticatedLayout subdomain={subdomain}>
+          {children}
+        </AuthenticatedLayout>
+      </TenantApplicationsProvider>
     </ThemeProvider>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 interface CreateTenantProps {
   onSuccess?: () => void;
@@ -69,10 +69,10 @@ export default function CreateTenant({
 
   return (
     <div className="bg-background rounded-lg shadow-lg p-6">
-      <h2 className="text-2xl font-bold mb-4 text-foreground">Créer un tenant</h2>
+      <h2 className="text-2xl font-bold mb-4 text-foreground">Créer un client</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Nom du tenant *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">Nom du client *</label>
           <input
             type="text"
             name="name"
@@ -84,7 +84,7 @@ export default function CreateTenant({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">Subdomain *</label>
+          <label className="block text-sm font-medium text-foreground mb-1">Sous-domaine *</label>
           <input
             type="text"
             name="subdomain"
@@ -93,9 +93,9 @@ export default function CreateTenant({
             required
             pattern="[a-z0-9-]+"
             className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground placeholder-muted-foreground"
-            placeholder="mon-tenant"
+            placeholder="mon-client"
           />
-          <p className="text-xs text-muted-foreground mt-1">Uniquement des lettres minuscules, chiffres et tirets</p>
+          <p className="text-xs text-muted-foreground mt-1">Uniquement des lettres minuscules, chiffres et tirets sans espaces</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-foreground mb-1">Email de l'administrateur *</label>

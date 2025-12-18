@@ -1,5 +1,4 @@
 import SessionClientProvider from "@/app/SessionClientProvider";
-import AppLayout from "@/components/layout/AppLayout";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -20,7 +19,7 @@ export default function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <body className={`${inter.className} bg-background text-foreground min-h-screen`}>
         <SessionClientProvider>
-          <AppLayout>{children}</AppLayout>
+          {children}
         </SessionClientProvider>
       </body>
     </html>

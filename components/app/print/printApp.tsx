@@ -349,9 +349,10 @@ export default function PrintApp() {
     // Construction du JSON metadata
     const jsonPayload = {
       meta: {
+        flux:'simpaap',
         submissionDate: new Date().toISOString(),
         client: 'session.user.tenantSlug',
-        user: 'session.user.name',
+        user: 'session.user.email',
         totalFiles: filesToSend.length,
         totalPages: totalPages,
         uniqueKey : uniqueKey,
