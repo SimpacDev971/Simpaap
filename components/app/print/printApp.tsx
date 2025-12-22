@@ -15,33 +15,46 @@ import {
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { pdfjs } from "react-pdf";
 import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import PdfViewer from "../PdfViewer";
 
 // --- DÉBUT DE LA CORRECTION CRITIQUE (Web Worker PDF.js) ---
-// Utilisation d'une URL absolue pour une meilleure portabilité (si la configuration le permet)
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+// Utilisation de la version de pdfjs incluse dans react-pdf pour éviter les conflits de version
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 // --- FIN DE LA CORRECTION CRITIQUE ---
 
 // --- Types & Constants ---
 
 type PrintColor = 'noir_blanc' | 'couleur';
 type PrintSide = 'recto' | 'recto_verso';
-type EnvelopeType = 'C6/5' | 'C5' | 'C4';
-type PostageSpeed = 'J+1' | 'J+2' | 'J+3';
-type PostageType = 'recommande' | 'economique' | 'rapide';
 type ActiveFileArea = 'source' | 'annexes'; // Pour la gestion de l'aperçu
+
+interface Enveloppe {
+  id: number;
+  fullName: string;
+  taille: string;
+  pdsMax: number;
+  addrX: number;
+  addrY: number;
+  addrH: number;
+  addrL: number;
+  isActive: boolean;
+}
+
+interface PostageRate {
+  id: number;
+  fullName: string;
+  name: string;
+  price: number;
+  pdsMin: number;
+  pdsMax: number;
+}
 
 interface MailOptions {
   color: PrintColor;
   side: PrintSide;
-  envelope: EnvelopeType;
-  postageType: PostageType;
-  postageSpeed: PostageSpeed;
 }
 
 interface PDFFile {
@@ -55,28 +68,9 @@ interface PDFFile {
 const DEFAULT_OPTIONS: MailOptions = {
   color: 'noir_blanc',
   side: 'recto',
-  envelope: 'C6/5',
-  postageType: 'economique',
-  postageSpeed: 'J+3'
 };
 
-const ENVELOPE_TYPES = [
-  { value: 'C6/5', label: 'C6/5 (Format classique - plié en 3)' },
-  { value: 'C5', label: 'C5 (Demi A4 - plié en 2)' },
-  { value: 'C4', label: 'C4 (Grand format A4 - non plié)' },
-];
-
-const POSTAGE_TYPES = [
-  { value: 'economique', label: 'Économique (Ecopli)' },
-  { value: 'rapide', label: 'Rapide (Lettre Verte / Prioritaire)' },
-  { value: 'recommande', label: 'Recommandé (LRAR)' },
-];
-
-const POSTAGE_SPEEDS = [
-  { value: 'J+1', label: 'J+1 (Urgent)' },
-  { value: 'J+2', label: 'J+2 (Standard)' },
-  { value: 'J+3', label: 'J+3 (Éco)' },
-];
+const WEIGHT_PER_PAGE_GRAMS = 5; // 1 page = 5 grams
 
 // --- Main Application Component ---
 
@@ -85,16 +79,23 @@ export default function PrintApp() {
   const [sourceFile, setSourceFile] = useState<PDFFile | null>(null);
   const [annexes, setAnnexes] = useState<PDFFile[]>([]);
   // Ancien selectedPdfId pour la prévisualisation
-  const [selectedPdfId, setSelectedPdfId] = useState<string | null>(null); 
+  const [selectedPdfId, setSelectedPdfId] = useState<string | null>(null);
   // Nouvel état pour savoir si on regarde le source ou une annexe
   const [activePreviewArea, setActivePreviewArea] = useState<ActiveFileArea>('source');
-  
+
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [currentNumPages, setCurrentNumPages] = useState<number>(0); 
+  const [currentNumPages, setCurrentNumPages] = useState<number>(0);
   const [options, setOptions] = useState<MailOptions>(DEFAULT_OPTIONS);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeStep, setActiveStep] = useState<'upload' | 'config' | 'success'>('config');
-  
+
+  // Enveloppes et affranchissements
+  const [enveloppes, setEnveloppes] = useState<Enveloppe[]>([]);
+  const [selectedEnveloppe, setSelectedEnveloppe] = useState<Enveloppe | null>(null);
+  const [separation, setSeparation] = useState<number>(1); // Pages par courrier (publipostage)
+  const [calculatedRate, setCalculatedRate] = useState<PostageRate | null>(null);
+  const [loadingRate, setLoadingRate] = useState(false);
+
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const annexeFileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -106,6 +107,29 @@ export default function PrintApp() {
     const annexePages = annexes.reduce((sum, pdf) => sum + pdf.numPages, 0);
     return sourcePages + annexePages;
   }, [sourceFile, annexes]);
+
+  // Calcul du nombre de courriers et du poids
+  const totalLetters = useMemo(() => {
+    if (!sourceFile) return 0;
+    return Math.ceil(sourceFile.numPages / separation);
+  }, [sourceFile, separation]);
+
+  const annexePagesTotal = useMemo(() => {
+    return annexes.reduce((sum, pdf) => sum + pdf.numPages, 0);
+  }, [annexes]);
+
+  const pagesPerEnvelope = useMemo(() => {
+    return separation + annexePagesTotal;
+  }, [separation, annexePagesTotal]);
+
+  const weightPerEnvelope = useMemo(() => {
+    return pagesPerEnvelope * WEIGHT_PER_PAGE_GRAMS;
+  }, [pagesPerEnvelope]);
+
+  const totalPostageCost = useMemo(() => {
+    if (!calculatedRate) return 0;
+    return totalLetters * calculatedRate.price;
+  }, [totalLetters, calculatedRate]);
 
   // Obtenir le PDF sélectionné pour l'APERÇU
   const selectedPdf = useMemo(() => {
@@ -136,6 +160,60 @@ export default function PrintApp() {
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedPdfId, activePreviewArea]);
+
+  // 4. Fetch enveloppes on mount
+  useEffect(() => {
+    const fetchEnveloppes = async () => {
+      try {
+        const res = await fetch('/api/print-options/enveloppes?activeOnly=true');
+        if (res.ok) {
+          const data = await res.json();
+          setEnveloppes(data);
+          // Sélectionner la première enveloppe par défaut
+          if (data.length > 0 && !selectedEnveloppe) {
+            setSelectedEnveloppe(data[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors du chargement des enveloppes:', error);
+      }
+    };
+    fetchEnveloppes();
+  }, []);
+
+  // 5. Calculate postage when relevant inputs change
+  useEffect(() => {
+    const calculatePostage = async () => {
+      if (!selectedEnveloppe || weightPerEnvelope <= 0) {
+        setCalculatedRate(null);
+        return;
+      }
+
+      setLoadingRate(true);
+      try {
+        const res = await fetch('/api/print-options/calculate-postage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            env_taille: selectedEnveloppe.taille,
+            weightGrams: weightPerEnvelope,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setCalculatedRate(data.rate);
+        }
+      } catch (error) {
+        console.error('Erreur lors du calcul du tarif:', error);
+        setCalculatedRate(null);
+      } finally {
+        setLoadingRate(false);
+      }
+    };
+
+    calculatePostage();
+  }, [selectedEnveloppe, weightPerEnvelope]);
 
   // --- Gestion des fichiers ---
 
@@ -371,13 +449,29 @@ export default function PrintApp() {
           duplex: options.side === 'recto_verso'
         },
         finishing: {
-          envelope: options.envelope,
+          envelope: selectedEnveloppe ? {
+            taille: selectedEnveloppe.taille,
+            fullName: selectedEnveloppe.fullName,
+            pdsMax: selectedEnveloppe.pdsMax,
+            addrX: selectedEnveloppe.addrX,
+            addrY: selectedEnveloppe.addrY,
+            addrH: selectedEnveloppe.addrH,
+            addrL: selectedEnveloppe.addrL,
+          } : null,
           insertType: 'automatic'
         },
-        logistics: {
-          carrier: 'LA_POSTE',
-          productCode: options.postageType,
-          serviceLevel: options.postageSpeed
+        postage: {
+          separation: separation,
+          totalLetters: totalLetters,
+          pagesPerEnvelope: pagesPerEnvelope,
+          weightPerEnvelope: weightPerEnvelope,
+          rate: calculatedRate ? {
+            id: calculatedRate.id,
+            fullName: calculatedRate.fullName,
+            name: calculatedRate.name,
+            price: calculatedRate.price,
+          } : null,
+          totalCost: totalPostageCost,
         }
       }
     };
@@ -641,26 +735,28 @@ export default function PrintApp() {
       <div>
         <Label>Format d'enveloppe</Label>
         <Select
-          value={options.envelope}
-          onValueChange={(v) => updateOption('envelope', v)}
+          value={selectedEnveloppe?.taille || ''}
+          onValueChange={(taille) => {
+            const env = enveloppes.find(e => e.taille === taille);
+            if (env) setSelectedEnveloppe(env);
+          }}
         >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Sélectionnez un format" />
           </SelectTrigger>
           <SelectContent>
-            {ENVELOPE_TYPES.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
+            {enveloppes.map((env) => (
+              <SelectItem key={env.id} value={env.taille}>
+                {env.taille} - {env.fullName}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <div className="mt-2 text-xs flex items-center gap-1">
-          <AlertCircle size={12} className="text-blue-600" />
-          {options.envelope === 'C4'
-            ? 'Les documents seront envoyés à plat (sans pliage).'
-            : 'Les documents seront pliés pour correspondre à l’enveloppe.'}
-        </div>
+        {selectedEnveloppe && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            Poids max: {selectedEnveloppe.pdsMax}g
+          </div>
+        )}
       </div>
     </Card>
   </section>
@@ -671,43 +767,64 @@ export default function PrintApp() {
       Affranchissement
     </h2>
 
-    <Card className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <Label>Gamme</Label>
-        <Select
-          value={options.postageType}
-          onValueChange={(v) => updateOption('postageType', v)}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Sélectionnez une gamme" />
-          </SelectTrigger>
-          <SelectContent>
-            {POSTAGE_TYPES.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <Card className="p-6 space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <Label htmlFor="separation">Pages par courrier (publipostage)</Label>
+          <Input
+            id="separation"
+            type="number"
+            min={1}
+            value={separation}
+            onChange={(e) => setSeparation(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-full"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Nombre de pages du document source par courrier
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tarif calculé</Label>
+          {loadingRate ? (
+            <p className="text-sm text-muted-foreground">Calcul en cours...</p>
+          ) : calculatedRate ? (
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="font-medium">{calculatedRate.fullName}</p>
+              <p className="text-sm text-muted-foreground">
+                {calculatedRate.pdsMin}g - {calculatedRate.pdsMax}g
+              </p>
+              <p className="text-lg font-bold text-green-600">
+                {calculatedRate.price.toFixed(4)} € / courrier
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-destructive">
+              Aucun tarif trouvé pour ce poids ({weightPerEnvelope}g)
+            </p>
+          )}
+        </div>
       </div>
 
-      <div>
-        <Label>Délai indicatif</Label>
-        <Select
-          value={options.postageSpeed}
-          onValueChange={(v) => updateOption('postageSpeed', v)}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Sélectionnez un délai" />
-          </SelectTrigger>
-          <SelectContent>
-            {POSTAGE_SPEEDS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <hr className="border-slate-200" />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="text-center p-3 bg-muted/50 rounded-lg">
+          <p className="text-muted-foreground">Courriers</p>
+          <p className="text-xl font-bold">{totalLetters}</p>
+        </div>
+        <div className="text-center p-3 bg-muted/50 rounded-lg">
+          <p className="text-muted-foreground">Pages/courrier</p>
+          <p className="text-xl font-bold">{pagesPerEnvelope}</p>
+        </div>
+        <div className="text-center p-3 bg-muted/50 rounded-lg">
+          <p className="text-muted-foreground">Poids/courrier</p>
+          <p className="text-xl font-bold">{weightPerEnvelope}g</p>
+        </div>
+        <div className="text-center p-3 bg-green-50 rounded-lg">
+          <p className="text-muted-foreground">Total affranchissement</p>
+          <p className="text-xl font-bold text-green-600">{totalPostageCost.toFixed(2)} €</p>
+        </div>
       </div>
     </Card>
   </section>
@@ -737,9 +854,8 @@ export default function PrintApp() {
   onPageChange={setCurrentPage} // Passer la fonction directement
   
   // 3. Configuration visuelle
-  // L'astuce est ici : on passe 'options.envelope' (un string), pas 'options' (un objet)
-  envelopeType={options.envelope}
-  
+  envelopeType={selectedEnveloppe?.taille || 'C6/5'}
+
   // 4. Logique d'affichage de la fenêtre calculée ICI dans le parent
   showWindow={activePreviewArea === 'source' && currentPage === 1}
 />
@@ -755,12 +871,16 @@ export default function PrintApp() {
         <span className="font-medium">{sourceFile ? sourceFile.numPages : 'Non chargé'}</span>
       </div>
       <div className="flex justify-between">
-        <span>Nb Annexes</span>
-        <span className="font-medium">{annexes.length || 0}</span>
+        <span>Séparation</span>
+        <span className="font-medium">{separation} page{separation > 1 ? 's' : ''}/courrier</span>
       </div>
       <div className="flex justify-between">
-        <span>Pages totales</span>
-        <span className="font-medium">{totalPages > 0 ? totalPages : '-'}</span>
+        <span>Nb Courriers</span>
+        <span className="font-medium">{totalLetters || '-'}</span>
+      </div>
+      <div className="flex justify-between">
+        <span>Annexes</span>
+        <span className="font-medium">{annexes.length} ({annexePagesTotal} pages)</span>
       </div>
       <div className="flex justify-between">
         <span>Impression</span>
@@ -770,7 +890,15 @@ export default function PrintApp() {
       </div>
       <div className="flex justify-between">
         <span>Enveloppe</span>
-        <span className="font-medium">{options.envelope}</span>
+        <span className="font-medium">{selectedEnveloppe?.taille || '-'}</span>
+      </div>
+      <div className="flex justify-between">
+        <span>Poids/courrier</span>
+        <span className="font-medium">{weightPerEnvelope}g</span>
+      </div>
+      <div className="flex justify-between border-t pt-2 mt-2">
+        <span className="font-semibold">Affranchissement</span>
+        <span className="font-bold text-green-600">{totalPostageCost.toFixed(2)} €</span>
       </div>
     </div>
   </CardContent>
@@ -781,25 +909,26 @@ export default function PrintApp() {
 
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 shadow-lg z-50">
   <div className="container mx-auto max-w-5xl flex flex-col md:flex-row items-center justify-between gap-3 md:gap-0">
-    
+
     <div className="hidden md:flex flex-col">
       <p className="text-sm text-muted-foreground">
-        {1 + annexes.length} document{1 + annexes.length > 1 ? 's' : ''} • {totalPages} page{totalPages > 1 ? 's' : ''}
+        {totalLetters} courrier{totalLetters > 1 ? 's' : ''} • {pagesPerEnvelope} page{pagesPerEnvelope > 1 ? 's' : ''}/courrier • {weightPerEnvelope}g
       </p>
       <p className="font-semibold text-foreground">
-        Total estimé : {(totalPages * 0.15 + 1.20 * (1 + annexes.length)).toFixed(2)} € HT
+        Total affranchissement : {totalPostageCost.toFixed(2)} € HT
+        {calculatedRate && <span className="text-sm font-normal text-muted-foreground ml-2">({calculatedRate.fullName})</span>}
       </p>
     </div>
 
     <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
       <Button className="flex-1 md:flex-none w-full md:w-auto bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleSubmit}
-        disabled={!sourceFile || isSubmitting}
+        disabled={!sourceFile || isSubmitting || !calculatedRate}
       >
         {isSubmitting ? 'Traitement...' : 'VALIDER ET ENVOYER'}
       </Button>
     </div>
-    
+
   </div>
 </div>
 

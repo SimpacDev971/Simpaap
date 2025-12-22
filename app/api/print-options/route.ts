@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 3. Query all assigned print options for this tenant via join tables
-    const [colors, sides, envelopes, postageTypes, postageSpeeds] = await Promise.all([
+    const [colors, sides] = await Promise.all([
       prisma.tenant_print_color.findMany({
         where: { tenantId: tenant.id },
         include: { print_color: true },
@@ -62,44 +62,11 @@ export async function GET(req: NextRequest) {
           .filter(s => s.isActive)
           .map(({ id, value, label, isActive, sortOrder }) => ({ id, value, label, isActive, sortOrder }))
       ),
-      prisma.tenant_envelope_type.findMany({
-        where: { tenantId: tenant.id },
-        include: { envelope_type: true },
-        orderBy: { envelope_type: { sortOrder: 'asc' } },
-      }).then(assignments =>
-        assignments
-          .map(a => a.envelope_type)
-          .filter(e => e.isActive)
-          .map(({ id, value, label, description, isActive, sortOrder }) => ({ id, value, label, description, isActive, sortOrder }))
-      ),
-      prisma.tenant_postage_type.findMany({
-        where: { tenantId: tenant.id },
-        include: { postage_type: true },
-        orderBy: { postage_type: { sortOrder: 'asc' } },
-      }).then(assignments =>
-        assignments
-          .map(a => a.postage_type)
-          .filter(t => t.isActive)
-          .map(({ id, value, label, isActive, sortOrder }) => ({ id, value, label, isActive, sortOrder }))
-      ),
-      prisma.tenant_postage_speed.findMany({
-        where: { tenantId: tenant.id },
-        include: { postage_speed: true },
-        orderBy: { postage_speed: { sortOrder: 'asc' } },
-      }).then(assignments =>
-        assignments
-          .map(a => a.postage_speed)
-          .filter(s => s.isActive)
-          .map(({ id, value, label, isActive, sortOrder }) => ({ id, value, label, isActive, sortOrder }))
-      ),
     ]);
 
     const result: CachedPrintOptions = {
       colors,
       sides,
-      envelopes,
-      postageTypes,
-      postageSpeeds,
     };
 
     // 4. Cache the result

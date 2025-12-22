@@ -20,9 +20,6 @@ export async function GET(
       include: {
         tenant_print_color: { include: { print_color: true } },
         tenant_print_side: { include: { print_side: true } },
-        tenant_envelope_type: { include: { envelope_type: true } },
-        tenant_postage_type: { include: { postage_type: true } },
-        tenant_postage_speed: { include: { postage_speed: true } },
       },
     });
 
@@ -33,9 +30,6 @@ export async function GET(
     return NextResponse.json({
       colors: tenant.tenant_print_color.map(a => a.print_color),
       sides: tenant.tenant_print_side.map(a => a.print_side),
-      envelopes: tenant.tenant_envelope_type.map(a => a.envelope_type),
-      postageTypes: tenant.tenant_postage_type.map(a => a.postage_type),
-      postageSpeeds: tenant.tenant_postage_speed.map(a => a.postage_speed),
     });
   } catch (error) {
     console.error('Error fetching tenant print options:', error);
@@ -46,7 +40,7 @@ export async function GET(
 /**
  * PUT /api/tenant/[id]/print-options
  * Met à jour les options d'impression assignées au tenant
- * Body: { colorIds?: number[], sideIds?: number[], envelopeIds?: number[], postageTypeIds?: number[], postageSpeedIds?: number[] }
+ * Body: { colorIds?: number[], sideIds?: number[] }
  * Requires SUPERADMIN or ADMIN of the tenant
  */
 export async function PUT(
@@ -73,7 +67,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { colorIds, sideIds, envelopeIds, postageTypeIds, postageSpeedIds } = body;
+    const { colorIds, sideIds } = body;
 
     // Find tenant to get subdomain for cache invalidation
     const tenant = await prisma.tenant.findUnique({
@@ -103,36 +97,6 @@ export async function PUT(
         if (sideIds.length > 0) {
           await tx.tenant_print_side.createMany({
             data: sideIds.map((printSideId: number) => ({ tenantId: id, printSideId })),
-          });
-        }
-      }
-
-      // Update envelopes if provided
-      if (envelopeIds !== undefined) {
-        await tx.tenant_envelope_type.deleteMany({ where: { tenantId: id } });
-        if (envelopeIds.length > 0) {
-          await tx.tenant_envelope_type.createMany({
-            data: envelopeIds.map((envelopeTypeId: number) => ({ tenantId: id, envelopeTypeId })),
-          });
-        }
-      }
-
-      // Update postage types if provided
-      if (postageTypeIds !== undefined) {
-        await tx.tenant_postage_type.deleteMany({ where: { tenantId: id } });
-        if (postageTypeIds.length > 0) {
-          await tx.tenant_postage_type.createMany({
-            data: postageTypeIds.map((postageTypeId: number) => ({ tenantId: id, postageTypeId })),
-          });
-        }
-      }
-
-      // Update postage speeds if provided
-      if (postageSpeedIds !== undefined) {
-        await tx.tenant_postage_speed.deleteMany({ where: { tenantId: id } });
-        if (postageSpeedIds.length > 0) {
-          await tx.tenant_postage_speed.createMany({
-            data: postageSpeedIds.map((postageSpeedId: number) => ({ tenantId: id, postageSpeedId })),
           });
         }
       }

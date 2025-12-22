@@ -3,7 +3,11 @@
     "allow": [
       "mcp__ide__getDiagnostics",
       "Bash(pnpm prisma generate:*)",
-      "Bash(pnpm prisma db push:*)"
+      "Bash(pnpm prisma db push:*)",
+      "Bash(dir \"C:\\\\Users\\\\Nicolas\\\\Documents\\\\Developpement\\\\simpaap\\\\components\\\\app\\\\print\" /S)",
+      "Bash(cat:*)",
+      "Bash(dir \"C:\\\\Users\\\\Nicolas\\\\Documents\\\\Developpement\\\\simpaap\\\\app\")",
+      "Bash(npx shadcn@latest add:*)"
     ]
   }
 }

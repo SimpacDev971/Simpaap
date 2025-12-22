@@ -21,37 +21,9 @@ export interface CachedPrintSide {
   sortOrder: number;
 }
 
-export interface CachedEnvelopeType {
-  id: number;
-  value: string;
-  label: string;
-  description: string | null;
-  isActive: boolean;
-  sortOrder: number;
-}
-
-export interface CachedPostageType {
-  id: number;
-  value: string;
-  label: string;
-  isActive: boolean;
-  sortOrder: number;
-}
-
-export interface CachedPostageSpeed {
-  id: number;
-  value: string;
-  label: string;
-  isActive: boolean;
-  sortOrder: number;
-}
-
 export interface CachedPrintOptions {
   colors: CachedPrintColor[];
   sides: CachedPrintSide[];
-  envelopes: CachedEnvelopeType[];
-  postageTypes: CachedPostageType[];
-  postageSpeeds: CachedPostageSpeed[];
 }
 
 // ────────────────────────────────────────────────

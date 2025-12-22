@@ -2,30 +2,52 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import AffranchissementsCrud from "./AffranchissementsCrud";
+import EnveloppesCrud from "./EnveloppesCrud";
 import PrintOptionsCrud from "./shared/PrintOptionsCrud";
 
-type SubTabType = "colors" | "sides" | "envelopes" | "postageTypes" | "postageSpeeds";
+type SubTabType = "colors" | "sides" | "enveloppes" | "affranchissements";
 
-const SUB_TABS: { id: SubTabType; label: string; hasDescription: boolean }[] = [
-  { id: "colors", label: "Couleurs", hasDescription: false },
-  { id: "sides", label: "Côtés", hasDescription: false },
-  { id: "envelopes", label: "Enveloppes", hasDescription: true },
-  { id: "postageTypes", label: "Types d'affranchissement", hasDescription: false },
-  { id: "postageSpeeds", label: "Vitesses d'envoi", hasDescription: false },
+interface SubTabConfig {
+  id: SubTabType;
+  label: string;
+  component: "PrintOptionsCrud" | "EnveloppesCrud" | "AffranchissementsCrud";
+  apiEndpoint?: string;
+  hasDescription?: boolean;
+}
+
+const SUB_TABS: SubTabConfig[] = [
+  { id: "colors", label: "Couleurs", component: "PrintOptionsCrud", apiEndpoint: "/api/print-options/colors", hasDescription: false },
+  { id: "sides", label: "Côtés", component: "PrintOptionsCrud", apiEndpoint: "/api/print-options/sides", hasDescription: false },
+  { id: "enveloppes", label: "Enveloppes", component: "EnveloppesCrud" },
+  { id: "affranchissements", label: "Affranchissements", component: "AffranchissementsCrud" },
 ];
-
-const API_ENDPOINTS: Record<SubTabType, string> = {
-  colors: "/api/print-options/colors",
-  sides: "/api/print-options/sides",
-  envelopes: "/api/print-options/envelopes",
-  postageTypes: "/api/print-options/postage-types",
-  postageSpeeds: "/api/print-options/postage-speeds",
-};
 
 export default function SimpaapCrud() {
   const [activeSubTab, setActiveSubTab] = useState<SubTabType>("colors");
 
   const currentTabConfig = SUB_TABS.find((t) => t.id === activeSubTab);
+
+  const renderContent = () => {
+    if (!currentTabConfig) return null;
+
+    switch (currentTabConfig.component) {
+      case "EnveloppesCrud":
+        return <EnveloppesCrud />;
+      case "AffranchissementsCrud":
+        return <AffranchissementsCrud />;
+      case "PrintOptionsCrud":
+      default:
+        return (
+          <PrintOptionsCrud
+            key={activeSubTab}
+            title={currentTabConfig.label}
+            apiEndpoint={currentTabConfig.apiEndpoint || ""}
+            hasDescription={currentTabConfig.hasDescription}
+          />
+        );
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -54,13 +76,8 @@ export default function SimpaapCrud() {
         </div>
       </div>
 
-      {/* Content - Global options (no tenant needed) */}
-      <PrintOptionsCrud
-        key={activeSubTab}
-        title={currentTabConfig?.label || ""}
-        apiEndpoint={API_ENDPOINTS[activeSubTab]}
-        hasDescription={currentTabConfig?.hasDescription}
-      />
+      {/* Content */}
+      {renderContent()}
     </div>
   );
 }
