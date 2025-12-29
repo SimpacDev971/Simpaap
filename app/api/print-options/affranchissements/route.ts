@@ -29,6 +29,9 @@ export async function GET(req: NextRequest) {
         enveloppe: {
           select: { fullName: true, taille: true },
         },
+        speed: {
+          select: { id: true, value: true, label: true },
+        },
       },
       orderBy: [
         { env_taille: 'asc' },
@@ -61,7 +64,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { fullName, name, env_taille, pdsMin, pdsMax, price, isActive = true } = body;
+    const { fullName, name, env_taille, speedId, pdsMin, pdsMax, price, isActive = true } = body;
 
     if (!fullName || !name || !env_taille || pdsMin === undefined || pdsMax === undefined || price === undefined) {
       return NextResponse.json(
@@ -82,11 +85,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Verify speed exists if provided
+    if (speedId) {
+      const speed = await prisma.affranchissement_speed.findUnique({
+        where: { id: parseInt(speedId, 10) },
+      });
+      if (!speed) {
+        return NextResponse.json(
+          { error: `Speed with id "${speedId}" not found` },
+          { status: 400 }
+        );
+      }
+    }
+
     const affranchissement = await prisma.affranchissement.create({
       data: {
         fullName,
         name,
         env_taille,
+        speedId: speedId ? parseInt(speedId, 10) : null,
         pdsMin: parseInt(pdsMin, 10),
         pdsMax: parseInt(pdsMax, 10),
         price: parseFloat(price),
@@ -95,6 +112,9 @@ export async function POST(req: NextRequest) {
       include: {
         enveloppe: {
           select: { fullName: true, taille: true },
+        },
+        speed: {
+          select: { id: true, value: true, label: true },
         },
       },
     });

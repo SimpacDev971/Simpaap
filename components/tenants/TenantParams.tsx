@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface Application {
@@ -14,7 +14,20 @@ interface PrintOption {
   id: number;
   value: string;
   label: string;
-  description?: string;
+  isActive: boolean;
+}
+
+interface Enveloppe {
+  id: number;
+  fullName: string;
+  taille: string;
+  isActive: boolean;
+}
+
+interface Speed {
+  id: number;
+  value: string;
+  label: string;
   isActive: boolean;
 }
 
@@ -25,15 +38,13 @@ interface TenantParamsProps {
   onCancel?: () => void;
 }
 
-type CategoryType = "applications" | "colors" | "sides" | "envelopes" | "postageTypes" | "postageSpeeds";
+type PrintOptionType = "colors" | "sides" | "enveloppes" | "speeds";
 
-const CATEGORIES: { id: CategoryType; label: string }[] = [
-  { id: "applications", label: "Applications" },
+const PRINT_OPTIONS: { id: PrintOptionType; label: string }[] = [
   { id: "colors", label: "Couleurs" },
   { id: "sides", label: "Côtés" },
-  { id: "envelopes", label: "Enveloppes" },
-  { id: "postageTypes", label: "Types d'affranchissement" },
-  { id: "postageSpeeds", label: "Vitesses d'envoi" },
+  { id: "enveloppes", label: "Enveloppes" },
+  { id: "speeds", label: "Vitesses" },
 ];
 
 export default function TenantParams({
@@ -42,29 +53,36 @@ export default function TenantParams({
   onSuccess,
   onCancel,
 }: TenantParamsProps) {
-  const [activeCategory, setActiveCategory] = useState<CategoryType>("applications");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Simpaap expansion state
+  const [simpaapExpanded, setSimpaapExpanded] = useState(false);
+  const [activePrintOption, setActivePrintOption] = useState<PrintOptionType>("colors");
 
   // All available options (global)
   const [allApplications, setAllApplications] = useState<Application[]>([]);
   const [allColors, setAllColors] = useState<PrintOption[]>([]);
   const [allSides, setAllSides] = useState<PrintOption[]>([]);
-  const [allEnvelopes, setAllEnvelopes] = useState<PrintOption[]>([]);
-  const [allPostageTypes, setAllPostageTypes] = useState<PrintOption[]>([]);
-  const [allPostageSpeeds, setAllPostageSpeeds] = useState<PrintOption[]>([]);
+  const [allEnveloppes, setAllEnveloppes] = useState<Enveloppe[]>([]);
+  const [allSpeeds, setAllSpeeds] = useState<Speed[]>([]);
 
   // Assigned to tenant
   const [assignedAppIds, setAssignedAppIds] = useState<Set<number>>(new Set());
   const [assignedColorIds, setAssignedColorIds] = useState<Set<number>>(new Set());
   const [assignedSideIds, setAssignedSideIds] = useState<Set<number>>(new Set());
-  const [assignedEnvelopeIds, setAssignedEnvelopeIds] = useState<Set<number>>(new Set());
-  const [assignedPostageTypeIds, setAssignedPostageTypeIds] = useState<Set<number>>(new Set());
-  const [assignedPostageSpeedIds, setAssignedPostageSpeedIds] = useState<Set<number>>(new Set());
+  const [assignedEnveloppeIds, setAssignedEnveloppeIds] = useState<Set<number>>(new Set());
+  const [assignedSpeedIds, setAssignedSpeedIds] = useState<Set<number>>(new Set());
 
   // Track changes
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Check if Simpaap is assigned
+  const simpaapApp = allApplications.find(
+    (app) => app.nom.toLowerCase() === "simpaap"
+  );
+  const isSimpaapAssigned = simpaapApp ? assignedAppIds.has(simpaapApp.id) : false;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,24 +90,21 @@ export default function TenantParams({
       setError("");
 
       try {
-        // Fetch all global options and tenant assignments in parallel
         const [
           appsRes,
           tenantRes,
           colorsRes,
           sidesRes,
-          envelopesRes,
-          postageTypesRes,
-          postageSpeedsRes,
+          enveloppesRes,
+          speedsRes,
           tenantPrintOptionsRes,
         ] = await Promise.all([
           fetch("/api/applications"),
           fetch(`/api/tenant/${tenantId}`),
           fetch("/api/print-options/colors"),
           fetch("/api/print-options/sides"),
-          fetch("/api/print-options/envelopes"),
-          fetch("/api/print-options/postage-types"),
-          fetch("/api/print-options/postage-speeds"),
+          fetch("/api/print-options/enveloppes"),
+          fetch("/api/print-options/speeds"),
           fetch(`/api/tenant/${tenantId}/print-options`),
         ]);
 
@@ -99,30 +114,25 @@ export default function TenantParams({
 
         const apps = await appsRes.json();
         const tenant = await tenantRes.json();
-        const colors = await colorsRes.json();
-        const sides = await sidesRes.json();
-        const envelopes = await envelopesRes.json();
-        const postageTypes = await postageTypesRes.json();
-        const postageSpeeds = await postageSpeedsRes.json();
-        const tenantPrintOptions = await tenantPrintOptionsRes.json();
+        const colors = colorsRes.ok ? await colorsRes.json() : [];
+        const sides = sidesRes.ok ? await sidesRes.json() : [];
+        const enveloppes = enveloppesRes.ok ? await enveloppesRes.json() : [];
+        const speeds = speedsRes.ok ? await speedsRes.json() : [];
+        const tenantPrintOptions = tenantPrintOptionsRes.ok ? await tenantPrintOptionsRes.json() : {};
 
-        // Set all available options
         setAllApplications(apps);
         setAllColors(colors.filter((c: PrintOption) => c.isActive));
         setAllSides(sides.filter((s: PrintOption) => s.isActive));
-        setAllEnvelopes(envelopes.filter((e: PrintOption) => e.isActive));
-        setAllPostageTypes(postageTypes.filter((t: PrintOption) => t.isActive));
-        setAllPostageSpeeds(postageSpeeds.filter((s: PrintOption) => s.isActive));
+        setAllEnveloppes(enveloppes.filter((e: Enveloppe) => e.isActive));
+        setAllSpeeds(speeds.filter((s: Speed) => s.isActive));
 
-        // Set assigned IDs
         const tenantAppIds = tenant.tenant_application?.map((ta: { applicationid: number }) => ta.applicationid) || [];
         setAssignedAppIds(new Set(tenantAppIds));
 
         setAssignedColorIds(new Set(tenantPrintOptions.colors?.map((c: PrintOption) => c.id) || []));
         setAssignedSideIds(new Set(tenantPrintOptions.sides?.map((s: PrintOption) => s.id) || []));
-        setAssignedEnvelopeIds(new Set(tenantPrintOptions.envelopes?.map((e: PrintOption) => e.id) || []));
-        setAssignedPostageTypeIds(new Set(tenantPrintOptions.postageTypes?.map((t: PrintOption) => t.id) || []));
-        setAssignedPostageSpeedIds(new Set(tenantPrintOptions.postageSpeeds?.map((s: PrintOption) => s.id) || []));
+        setAssignedEnveloppeIds(new Set(tenantPrintOptions.enveloppes?.map((e: Enveloppe) => e.id) || []));
+        setAssignedSpeedIds(new Set(tenantPrintOptions.speeds?.map((s: Speed) => s.id) || []));
 
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Erreur inconnue";
@@ -135,18 +145,27 @@ export default function TenantParams({
     fetchData();
   }, [tenantId]);
 
-  const toggleItem = (category: CategoryType, id: number) => {
+  const toggleApp = (id: number) => {
+    setHasChanges(true);
+    setAssignedAppIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+        // If Simpaap is being unchecked, collapse the section
+        if (simpaapApp && id === simpaapApp.id) {
+          setSimpaapExpanded(false);
+        }
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const togglePrintOption = (type: PrintOptionType, id: number) => {
     setHasChanges(true);
 
-    switch (category) {
-      case "applications":
-        setAssignedAppIds(prev => {
-          const newSet = new Set(prev);
-          if (newSet.has(id)) newSet.delete(id);
-          else newSet.add(id);
-          return newSet;
-        });
-        break;
+    switch (type) {
       case "colors":
         setAssignedColorIds(prev => {
           const newSet = new Set(prev);
@@ -163,24 +182,16 @@ export default function TenantParams({
           return newSet;
         });
         break;
-      case "envelopes":
-        setAssignedEnvelopeIds(prev => {
+      case "enveloppes":
+        setAssignedEnveloppeIds(prev => {
           const newSet = new Set(prev);
           if (newSet.has(id)) newSet.delete(id);
           else newSet.add(id);
           return newSet;
         });
         break;
-      case "postageTypes":
-        setAssignedPostageTypeIds(prev => {
-          const newSet = new Set(prev);
-          if (newSet.has(id)) newSet.delete(id);
-          else newSet.add(id);
-          return newSet;
-        });
-        break;
-      case "postageSpeeds":
-        setAssignedPostageSpeedIds(prev => {
+      case "speeds":
+        setAssignedSpeedIds(prev => {
           const newSet = new Set(prev);
           if (newSet.has(id)) newSet.delete(id);
           else newSet.add(id);
@@ -195,7 +206,6 @@ export default function TenantParams({
     setError("");
 
     try {
-      // Update applications
       const appsRes = await fetch(`/api/tenant/applications`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -209,16 +219,14 @@ export default function TenantParams({
         throw new Error("Erreur lors de la mise à jour des applications");
       }
 
-      // Update print options
       const printRes = await fetch(`/api/tenant/${tenantId}/print-options`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           colorIds: Array.from(assignedColorIds),
           sideIds: Array.from(assignedSideIds),
-          envelopeIds: Array.from(assignedEnvelopeIds),
-          postageTypeIds: Array.from(assignedPostageTypeIds),
-          postageSpeedIds: Array.from(assignedPostageSpeedIds),
+          enveloppeIds: Array.from(assignedEnveloppeIds),
+          speedIds: Array.from(assignedSpeedIds),
         }),
       });
 
@@ -236,68 +244,17 @@ export default function TenantParams({
     }
   };
 
-  const renderCheckboxList = () => {
-    let items: { id: number; label: string; description?: string }[] = [];
-    let assignedIds: Set<number>;
-
-    switch (activeCategory) {
-      case "applications":
-        items = allApplications.map(a => ({ id: a.id, label: a.nom, description: a.description }));
-        assignedIds = assignedAppIds;
-        break;
+  const getPrintOptionItems = (type: PrintOptionType): { items: { id: number; label: string; description?: string }[]; assignedIds: Set<number> } => {
+    switch (type) {
       case "colors":
-        items = allColors.map(c => ({ id: c.id, label: c.label }));
-        assignedIds = assignedColorIds;
-        break;
+        return { items: allColors.map(c => ({ id: c.id, label: c.label })), assignedIds: assignedColorIds };
       case "sides":
-        items = allSides.map(s => ({ id: s.id, label: s.label }));
-        assignedIds = assignedSideIds;
-        break;
-      case "envelopes":
-        items = allEnvelopes.map(e => ({ id: e.id, label: e.label, description: e.description }));
-        assignedIds = assignedEnvelopeIds;
-        break;
-      case "postageTypes":
-        items = allPostageTypes.map(t => ({ id: t.id, label: t.label }));
-        assignedIds = assignedPostageTypeIds;
-        break;
-      case "postageSpeeds":
-        items = allPostageSpeeds.map(s => ({ id: s.id, label: s.label }));
-        assignedIds = assignedPostageSpeedIds;
-        break;
+        return { items: allSides.map(s => ({ id: s.id, label: s.label })), assignedIds: assignedSideIds };
+      case "enveloppes":
+        return { items: allEnveloppes.map(e => ({ id: e.id, label: e.fullName, description: e.taille })), assignedIds: assignedEnveloppeIds };
+      case "speeds":
+        return { items: allSpeeds.map(s => ({ id: s.id, label: s.label })), assignedIds: assignedSpeedIds };
     }
-
-    if (items.length === 0) {
-      return (
-        <div className="text-center py-8 text-muted-foreground">
-          Aucune option disponible dans cette catégorie
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-2">
-        {items.map(item => (
-          <label
-            key={item.id}
-            className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-          >
-            <input
-              type="checkbox"
-              checked={assignedIds.has(item.id)}
-              onChange={() => toggleItem(activeCategory, item.id)}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-            />
-            <div className="flex-1">
-              <div className="font-medium">{item.label}</div>
-              {item.description && (
-                <div className="text-sm text-muted-foreground">{item.description}</div>
-              )}
-            </div>
-          </label>
-        ))}
-      </div>
-    );
   };
 
   if (loading) {
@@ -315,30 +272,131 @@ export default function TenantParams({
         Configurez les options disponibles pour <strong>{tenantName}</strong>
       </div>
 
-      <div className="flex gap-4 min-h-[400px]">
-        {/* Left Panel - Categories */}
-        <div className="w-48 flex-shrink-0 border-r pr-4">
-          <div className="space-y-1">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                  activeCategory === cat.id
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted text-muted-foreground"
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="space-y-2 max-h-[500px] overflow-auto">
+        {/* Applications List */}
+        {allApplications.map(app => {
+          const isSimpaap = app.nom.toLowerCase() === "simpaap";
+          const isAssigned = assignedAppIds.has(app.id);
 
-        {/* Right Panel - Checkboxes */}
-        <div className="flex-1 overflow-auto max-h-[400px]">
-          {renderCheckboxList()}
-        </div>
+          return (
+            <div key={app.id} className="border rounded-lg overflow-hidden">
+              {/* Application Row */}
+              <div
+                className={`flex items-center gap-3 p-3 ${
+                  isSimpaap && isAssigned ? "cursor-pointer hover:bg-muted/50" : ""
+                }`}
+                onClick={() => {
+                  if (isSimpaap && isAssigned) {
+                    setSimpaapExpanded(!simpaapExpanded);
+                  }
+                }}
+              >
+                {/* Expand/Collapse icon for Simpaap */}
+                {isSimpaap && isAssigned ? (
+                  <span className="text-muted-foreground">
+                    {simpaapExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </span>
+                ) : (
+                  <span className="w-4" />
+                )}
+
+                <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isAssigned}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleApp(app.id);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium">{app.nom}</div>
+                    {app.description && (
+                      <div className="text-sm text-muted-foreground">{app.description}</div>
+                    )}
+                  </div>
+                </label>
+
+                {isSimpaap && isAssigned && (
+                  <span className="text-xs text-muted-foreground">
+                    Cliquez pour configurer
+                  </span>
+                )}
+              </div>
+
+              {/* Simpaap Print Options - Nested */}
+              {isSimpaap && isAssigned && simpaapExpanded && (
+                <div className="border-t bg-muted/30">
+                  <div className="p-3 border-b bg-muted/50">
+                    <div className="text-sm font-medium text-muted-foreground">
+                      Options d&apos;impression Simpaap
+                    </div>
+                  </div>
+
+                  <div className="flex min-h-[300px]">
+                    {/* Left: Print Option Categories */}
+                    <div className="w-40 border-r bg-background p-2 space-y-1">
+                      {PRINT_OPTIONS.map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setActivePrintOption(opt.id)}
+                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                            activePrintOption === opt.id
+                              ? "bg-primary text-primary-foreground"
+                              : "hover:bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Right: Checkboxes */}
+                    <div className="flex-1 p-3 overflow-auto max-h-[300px]">
+                      {(() => {
+                        const { items, assignedIds } = getPrintOptionItems(activePrintOption);
+
+                        if (items.length === 0) {
+                          return (
+                            <div className="text-center py-8 text-muted-foreground">
+                              Aucune option disponible
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-2">
+                            {items.map(item => (
+                              <label
+                                key={item.id}
+                                className="flex items-start gap-3 p-2 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={assignedIds.has(item.id)}
+                                  onChange={() => togglePrintOption(activePrintOption, item.id)}
+                                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                />
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">{item.label}</div>
+                                  {item.description && (
+                                    <div className="text-xs text-muted-foreground">{item.description}</div>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {error && (

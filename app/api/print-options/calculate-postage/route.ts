@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/print-options/calculate-postage
- * Calculates postage rate for a given weight and envelope size
- * Body: { env_taille: string, weightGrams: number }
- * Returns: { rate: { id, fullName, name, price } | null }
+ * Calculates postage rate for a given weight, envelope size, and optionally speed
+ * Body: { env_taille: string, weightGrams: number, speedId?: number }
+ * Returns: { rate: { id, fullName, name, price, speed } | null }
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { env_taille, weightGrams } = body;
+    const { env_taille, weightGrams, speedId } = body;
 
     if (!env_taille || weightGrams === undefined) {
       return NextResponse.json(
@@ -28,14 +28,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Build where clause
+    const whereClause: {
+      env_taille: string;
+      pdsMin: { lte: number };
+      pdsMax: { gte: number };
+      isActive: boolean;
+      speedId?: number;
+    } = {
+      env_taille,
+      pdsMin: { lte: weight },
+      pdsMax: { gte: weight },
+      isActive: true,
+    };
+
+    // Add speed filter if provided
+    if (speedId !== undefined && speedId !== null) {
+      whereClause.speedId = parseInt(speedId, 10);
+    }
+
     // Find the applicable rate
     const rate = await prisma.affranchissement.findFirst({
-      where: {
-        env_taille,
-        pdsMin: { lte: weight },
-        pdsMax: { gte: weight },
-        isActive: true,
-      },
+      where: whereClause,
       orderBy: { price: 'asc' }, // Get the cheapest rate if multiple match
       select: {
         id: true,
@@ -44,6 +58,14 @@ export async function POST(req: NextRequest) {
         price: true,
         pdsMin: true,
         pdsMax: true,
+        speedId: true,
+        speed: {
+          select: {
+            id: true,
+            value: true,
+            label: true,
+          },
+        },
       },
     });
 
@@ -55,8 +77,10 @@ export async function POST(req: NextRequest) {
         price: Number(rate.price),
         pdsMin: rate.pdsMin,
         pdsMax: rate.pdsMax,
+        speedId: rate.speedId,
+        speed: rate.speed,
       } : null,
-      input: { env_taille, weightGrams: weight },
+      input: { env_taille, weightGrams: weight, speedId: speedId || null },
     });
   } catch (error) {
     console.error('Error calculating postage:', error);

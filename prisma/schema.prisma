@@ -18,6 +18,8 @@ model Tenant {
   tenant_application    tenant_application[]
   tenant_print_color    tenant_print_color[]
   tenant_print_side     tenant_print_side[]
+  tenant_enveloppe      tenant_enveloppe[]
+  tenant_speed          tenant_speed[]
   print_items           print_item[]
 }
 
@@ -157,7 +159,21 @@ model enveloppe {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  affranchissements  affranchissement[]
+  tenant_enveloppe   tenant_enveloppe[]
+}
+
+model affranchissement_speed {
+  id        Int      @id @default(autoincrement())
+  value     String   @unique @db.VarChar(50)
+  label     String   @db.VarChar(255)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   affranchissements affranchissement[]
+  tenant_speed      tenant_speed[]
 }
 
 model affranchissement {
@@ -165,6 +181,7 @@ model affranchissement {
   fullName   String   @db.VarChar(255)
   name       String   @db.VarChar(50)
   env_taille String   @db.VarChar(50)
+  speedId    Int?
   pdsMin     Int
   pdsMax     Int
   price      Decimal  @db.Decimal(10, 4)
@@ -172,9 +189,11 @@ model affranchissement {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  enveloppe enveloppe @relation(fields: [env_taille], references: [taille])
+  enveloppe enveloppe               @relation(fields: [env_taille], references: [taille])
+  speed     affranchissement_speed? @relation(fields: [speedId], references: [id])
 
   @@index([env_taille, pdsMin, pdsMax])
+  @@index([speedId])
 }
 
 // ==========================================
@@ -197,6 +216,24 @@ model tenant_print_side {
   print_side  print_side @relation(fields: [printSideId], references: [id], onDelete: Cascade)
 
   @@id([tenantId, printSideId])
+}
+
+model tenant_enveloppe {
+  tenantId    String
+  enveloppeId Int
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enveloppe   enveloppe @relation(fields: [enveloppeId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, enveloppeId])
+}
+
+model tenant_speed {
+  tenantId String
+  speedId  Int
+  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  speed    affranchissement_speed @relation(fields: [speedId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, speedId])
 }
 
 // ==========================================

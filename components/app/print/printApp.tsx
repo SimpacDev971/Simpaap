@@ -27,9 +27,21 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 // --- Types & Constants ---
 
-type PrintColor = 'noir_blanc' | 'couleur';
-type PrintSide = 'recto' | 'recto_verso';
 type ActiveFileArea = 'source' | 'annexes'; // Pour la gestion de l'aperçu
+
+interface PrintColor {
+  id: number;
+  value: string;
+  label: string;
+  isActive: boolean;
+}
+
+interface PrintSide {
+  id: number;
+  value: string;
+  label: string;
+  isActive: boolean;
+}
 
 interface Enveloppe {
   id: number;
@@ -43,6 +55,13 @@ interface Enveloppe {
   isActive: boolean;
 }
 
+interface Speed {
+  id: number;
+  value: string;
+  label: string;
+  isActive: boolean;
+}
+
 interface PostageRate {
   id: number;
   fullName: string;
@@ -50,11 +69,12 @@ interface PostageRate {
   price: number;
   pdsMin: number;
   pdsMax: number;
-}
-
-interface MailOptions {
-  color: PrintColor;
-  side: PrintSide;
+  speedId?: number | null;
+  speed?: {
+    id: number;
+    value: string;
+    label: string;
+  } | null;
 }
 
 interface PDFFile {
@@ -64,11 +84,6 @@ interface PDFFile {
   numPages: number;
   Courrier :  boolean
 }
-
-const DEFAULT_OPTIONS: MailOptions = {
-  color: 'noir_blanc',
-  side: 'recto',
-};
 
 const WEIGHT_PER_PAGE_GRAMS = 5; // 1 page = 5 grams
 
@@ -85,13 +100,19 @@ export default function PrintApp() {
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [currentNumPages, setCurrentNumPages] = useState<number>(0);
-  const [options, setOptions] = useState<MailOptions>(DEFAULT_OPTIONS);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeStep, setActiveStep] = useState<'upload' | 'config' | 'success'>('config');
+  const [loadingOptions, setLoadingOptions] = useState(true);
 
-  // Enveloppes et affranchissements
+  // Tenant-authorized print options
+  const [colors, setColors] = useState<PrintColor[]>([]);
+  const [selectedColor, setSelectedColor] = useState<PrintColor | null>(null);
+  const [sides, setSides] = useState<PrintSide[]>([]);
+  const [selectedSide, setSelectedSide] = useState<PrintSide | null>(null);
   const [enveloppes, setEnveloppes] = useState<Enveloppe[]>([]);
   const [selectedEnveloppe, setSelectedEnveloppe] = useState<Enveloppe | null>(null);
+  const [speeds, setSpeeds] = useState<Speed[]>([]);
+  const [selectedSpeed, setSelectedSpeed] = useState<Speed | null>(null);
   const [separation, setSeparation] = useState<number>(1); // Pages par courrier (publipostage)
   const [calculatedRate, setCalculatedRate] = useState<PostageRate | null>(null);
   const [loadingRate, setLoadingRate] = useState(false);
@@ -161,24 +182,48 @@ export default function PrintApp() {
     setCurrentPage(1);
   }, [selectedPdfId, activePreviewArea]);
 
-  // 4. Fetch enveloppes on mount
+  // 4. Fetch tenant-authorized print options on mount
   useEffect(() => {
-    const fetchEnveloppes = async () => {
+    const fetchTenantOptions = async () => {
+      setLoadingOptions(true);
       try {
-        const res = await fetch('/api/print-options/enveloppes?activeOnly=true');
+        // Fetch tenant-specific print options
+        const res = await fetch('/api/print-options/tenant');
+
         if (res.ok) {
           const data = await res.json();
-          setEnveloppes(data);
-          // Sélectionner la première enveloppe par défaut
-          if (data.length > 0 && !selectedEnveloppe) {
-            setSelectedEnveloppe(data[0]);
+
+          // Colors
+          if (data.colors && data.colors.length > 0) {
+            setColors(data.colors);
+            setSelectedColor(data.colors[0]);
+          }
+
+          // Sides
+          if (data.sides && data.sides.length > 0) {
+            setSides(data.sides);
+            setSelectedSide(data.sides[0]);
+          }
+
+          // Enveloppes
+          if (data.enveloppes && data.enveloppes.length > 0) {
+            setEnveloppes(data.enveloppes);
+            setSelectedEnveloppe(data.enveloppes[0]);
+          }
+
+          // Speeds
+          if (data.speeds && data.speeds.length > 0) {
+            setSpeeds(data.speeds);
+            setSelectedSpeed(data.speeds[0]);
           }
         }
       } catch (error) {
-        console.error('Erreur lors du chargement des enveloppes:', error);
+        console.error('Erreur lors du chargement des options:', error);
+      } finally {
+        setLoadingOptions(false);
       }
     };
-    fetchEnveloppes();
+    fetchTenantOptions();
   }, []);
 
   // 5. Calculate postage when relevant inputs change
@@ -197,6 +242,7 @@ export default function PrintApp() {
           body: JSON.stringify({
             env_taille: selectedEnveloppe.taille,
             weightGrams: weightPerEnvelope,
+            speedId: selectedSpeed?.id || null,
           }),
         });
 
@@ -213,7 +259,7 @@ export default function PrintApp() {
     };
 
     calculatePostage();
-  }, [selectedEnveloppe, weightPerEnvelope]);
+  }, [selectedEnveloppe, weightPerEnvelope, selectedSpeed]);
 
   // --- Gestion des fichiers ---
 
@@ -408,10 +454,6 @@ export default function PrintApp() {
     }
   };
 
-  const updateOption = (key: keyof MailOptions, value: any) => {
-    setOptions(prev => ({ ...prev, [key]: value }));
-  };
-  
   // --- Submission ---
   const handleSubmit = async () => {
     if (!sourceFile) {
@@ -445,8 +487,16 @@ export default function PrintApp() {
       },
       productionOptions: {
         print: {
-          color: options.color === 'couleur',
-          duplex: options.side === 'recto_verso'
+          color: selectedColor ? {
+            id: selectedColor.id,
+            value: selectedColor.value,
+            label: selectedColor.label,
+          } : null,
+          side: selectedSide ? {
+            id: selectedSide.id,
+            value: selectedSide.value,
+            label: selectedSide.label,
+          } : null,
         },
         finishing: {
           envelope: selectedEnveloppe ? {
@@ -465,11 +515,17 @@ export default function PrintApp() {
           totalLetters: totalLetters,
           pagesPerEnvelope: pagesPerEnvelope,
           weightPerEnvelope: weightPerEnvelope,
+          speed: selectedSpeed ? {
+            id: selectedSpeed.id,
+            value: selectedSpeed.value,
+            label: selectedSpeed.label,
+          } : null,
           rate: calculatedRate ? {
             id: calculatedRate.id,
             fullName: calculatedRate.fullName,
             name: calculatedRate.name,
             price: calculatedRate.price,
+            speed: calculatedRate.speed,
           } : null,
           totalCost: totalPostageCost,
         }
@@ -696,66 +752,96 @@ export default function PrintApp() {
     </div>
 
     <Card className="p-6 space-y-6">
+      {loadingOptions ? (
+        <div className="text-center py-4 text-muted-foreground">Chargement des options...</div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <Label>Mode couleur</Label>
-          <Select
-            value={options.color}
-            onValueChange={(v) => updateOption('color', v)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Sélectionnez un mode couleur" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="noir_blanc">Noir et Blanc</SelectItem>
-              <SelectItem value="couleur">Couleur</SelectItem>
-            </SelectContent>
-          </Select>
+          {colors.length > 0 ? (
+            <Select
+              value={selectedColor?.id?.toString() || ''}
+              onValueChange={(id) => {
+                const color = colors.find(c => c.id === parseInt(id));
+                if (color) setSelectedColor(color);
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Sélectionnez un mode couleur" />
+              </SelectTrigger>
+              <SelectContent>
+                {colors.map((color) => (
+                  <SelectItem key={color.id} value={color.id.toString()}>
+                    {color.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-sm text-destructive mt-1">Aucune option de couleur disponible</p>
+          )}
         </div>
 
         <div>
-          <Label>Type d'impression</Label>
-          <Select
-            value={options.side}
-            onValueChange={(v) => updateOption('side', v)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Sélectionnez le type d'impression" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recto">Recto seul</SelectItem>
-              <SelectItem value="recto_verso">Recto / Verso</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label>Type d&apos;impression</Label>
+          {sides.length > 0 ? (
+            <Select
+              value={selectedSide?.id?.toString() || ''}
+              onValueChange={(id) => {
+                const side = sides.find(s => s.id === parseInt(id));
+                if (side) setSelectedSide(side);
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Sélectionnez le type d'impression" />
+              </SelectTrigger>
+              <SelectContent>
+                {sides.map((side) => (
+                  <SelectItem key={side.id} value={side.id.toString()}>
+                    {side.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-sm text-destructive mt-1">Aucune option de côté disponible</p>
+          )}
         </div>
       </div>
+      )}
 
       <hr className="border-slate-200" />
 
       <div>
-        <Label>Format d'enveloppe</Label>
-        <Select
-          value={selectedEnveloppe?.taille || ''}
-          onValueChange={(taille) => {
-            const env = enveloppes.find(e => e.taille === taille);
-            if (env) setSelectedEnveloppe(env);
-          }}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Sélectionnez un format" />
-          </SelectTrigger>
-          <SelectContent>
-            {enveloppes.map((env) => (
-              <SelectItem key={env.id} value={env.taille}>
-                {env.taille} - {env.fullName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {selectedEnveloppe && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            Poids max: {selectedEnveloppe.pdsMax}g
-          </div>
+        <Label>Format d&apos;enveloppe</Label>
+        {enveloppes.length > 0 ? (
+          <>
+            <Select
+              value={selectedEnveloppe?.taille || ''}
+              onValueChange={(taille) => {
+                const env = enveloppes.find(e => e.taille === taille);
+                if (env) setSelectedEnveloppe(env);
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Sélectionnez un format" />
+              </SelectTrigger>
+              <SelectContent>
+                {enveloppes.map((env) => (
+                  <SelectItem key={env.id} value={env.taille}>
+                    {env.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedEnveloppe && (
+              <div className="mt-2 text-xs text-muted-foreground">
+                Poids max: {selectedEnveloppe.pdsMax}g
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-destructive mt-1">Aucune enveloppe disponible</p>
         )}
       </div>
     </Card>
@@ -764,11 +850,36 @@ export default function PrintApp() {
   <section className={!sourceFile ? "opacity-50 pointer-events-none grayscale transition-all" : "transition-all"}>
     <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
       <Truck size={20} className="text-blue-600" />
-      Affranchissement
+      Affranchissement <p className="text-sm text-destructive">( Estimation )</p>
     </h2>
-
     <Card className="p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <Label>Vitesse d&apos;envoi</Label>
+          {speeds.length > 0 ? (
+            <Select
+              value={selectedSpeed?.id?.toString() || ''}
+              onValueChange={(id) => {
+                const speed = speeds.find(s => s.id === parseInt(id));
+                if (speed) setSelectedSpeed(speed);
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Sélectionnez une vitesse" />
+              </SelectTrigger>
+              <SelectContent>
+                {speeds.map((speed) => (
+                  <SelectItem key={speed.id} value={speed.id.toString()}>
+                    {speed.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-sm text-destructive mt-1">Aucune vitesse disponible</p>
+          )}
+        </div>
+
         <div>
           <Label htmlFor="separation">Pages par courrier (publipostage)</Label>
           <Input
@@ -783,27 +894,32 @@ export default function PrintApp() {
             Nombre de pages du document source par courrier
           </p>
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label>Tarif calculé</Label>
-          {loadingRate ? (
-            <p className="text-sm text-muted-foreground">Calcul en cours...</p>
-          ) : calculatedRate ? (
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="font-medium">{calculatedRate.fullName}</p>
-              <p className="text-sm text-muted-foreground">
-                {calculatedRate.pdsMin}g - {calculatedRate.pdsMax}g
-              </p>
-              <p className="text-lg font-bold text-green-600">
-                {calculatedRate.price.toFixed(4)} € / courrier
-              </p>
+      <div className="space-y-2">
+        <Label>Tarif calculé</Label>
+        {loadingRate ? (
+          <p className="text-sm text-muted-foreground">Calcul en cours...</p>
+        ) : calculatedRate ? (
+          <div className="p-3 bg-muted rounded-lg">
+            <p className="font-medium">{calculatedRate.fullName}</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>{calculatedRate.pdsMin}g - {calculatedRate.pdsMax}g</span>
+              {calculatedRate.speed && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  {calculatedRate.speed.label}
+                </span>
+              )}
             </div>
-          ) : (
-            <p className="text-sm text-destructive">
-              Aucun tarif trouvé pour ce poids ({weightPerEnvelope}g)
+            <p className="text-lg font-bold text-green-600">
+              {calculatedRate.price.toFixed(4)} € / courrier
             </p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <p className="text-sm text-destructive">
+            Aucun tarif trouvé pour ce poids ({weightPerEnvelope}g){selectedSpeed && ` et cette vitesse (${selectedSpeed.label})`}
+          </p>
+        )}
       </div>
 
       <hr className="border-slate-200" />
@@ -843,22 +959,28 @@ export default function PrintApp() {
     {/* Aperçu du document */}
     {/*<DocumentPreview />*/}
     <PdfViewer
-  // 1. Les données du fichier
-  selectedPdf={selectedPdf}
-  fileName={selectedPdf?.file.name || ''}
-  fileLabel={activePreviewArea === 'source' ? 'Source' : `Annexe #${annexes.findIndex(a => a.id === selectedPdf?.id) + 1}`}
-  
-  // 2. Pagination
-  currentPage={currentPage}
-  currentNumPages={currentNumPages}
-  onPageChange={setCurrentPage} // Passer la fonction directement
-  
-  // 3. Configuration visuelle
-  envelopeType={selectedEnveloppe?.taille || 'C6/5'}
+      // 1. Les données du fichier
+      selectedPdf={selectedPdf}
+      fileName={selectedPdf?.file.name || ''}
+      fileLabel={activePreviewArea === 'source' ? 'Source' : `Annexe #${annexes.findIndex(a => a.id === selectedPdf?.id) + 1}`}
 
-  // 4. Logique d'affichage de la fenêtre calculée ICI dans le parent
-  showWindow={activePreviewArea === 'source' && currentPage === 1}
-/>
+      // 2. Pagination
+      currentPage={currentPage}
+      currentNumPages={currentNumPages}
+      onPageChange={setCurrentPage}
+
+      // 3. Logique d'affichage de la fenêtre calculée ICI dans le parent
+      showWindow={activePreviewArea === 'source' && currentPage === 1}
+
+      // 4. Zone d'adresse en mm (depuis les settings de l'enveloppe)
+      addressWindow={selectedEnveloppe ? {
+        x: selectedEnveloppe.addrX,
+        y: selectedEnveloppe.addrY,
+        width: selectedEnveloppe.addrL,  // largeur
+        height: selectedEnveloppe.addrH, // hauteur
+      } : null}
+      envelopeLabel={`Fenêtre ${selectedEnveloppe?.fullName || ''}`}
+    />
 
     {/* Récapitulatif */}
     <CardHeader className="pt-6 border-t">
@@ -885,7 +1007,7 @@ export default function PrintApp() {
       <div className="flex justify-between">
         <span>Impression</span>
         <span className="font-medium">
-          {options.color === 'couleur' ? 'Couleur' : 'N&B'} • {options.side === 'recto' ? 'R' : 'R/V'}
+          {selectedColor?.label || '-'} • {selectedSide?.label || '-'}
         </span>
       </div>
       <div className="flex justify-between">
@@ -895,6 +1017,10 @@ export default function PrintApp() {
       <div className="flex justify-between">
         <span>Poids/courrier</span>
         <span className="font-medium">{weightPerEnvelope}g</span>
+      </div>
+      <div className="flex justify-between">
+        <span>Vitesse</span>
+        <span className="font-medium">{selectedSpeed?.label || '-'}</span>
       </div>
       <div className="flex justify-between border-t pt-2 mt-2">
         <span className="font-semibold">Affranchissement</span>

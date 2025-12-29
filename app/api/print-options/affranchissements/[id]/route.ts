@@ -28,7 +28,7 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const { fullName, name, env_taille, pdsMin, pdsMax, price, isActive } = body;
+    const { fullName, name, env_taille, speedId, pdsMin, pdsMax, price, isActive } = body;
 
     const existingAffranchissement = await prisma.affranchissement.findUnique({
       where: { id: affranchissementId },
@@ -51,12 +51,26 @@ export async function PUT(
       }
     }
 
+    // If speedId is being changed and provided, verify the new speed exists
+    if (speedId !== undefined && speedId !== null && speedId !== '') {
+      const speed = await prisma.affranchissement_speed.findUnique({
+        where: { id: parseInt(speedId, 10) },
+      });
+      if (!speed) {
+        return NextResponse.json(
+          { error: `Speed with id "${speedId}" not found` },
+          { status: 400 }
+        );
+      }
+    }
+
     const updatedAffranchissement = await prisma.affranchissement.update({
       where: { id: affranchissementId },
       data: {
         ...(fullName !== undefined && { fullName }),
         ...(name !== undefined && { name }),
         ...(env_taille !== undefined && { env_taille }),
+        ...(speedId !== undefined && { speedId: speedId ? parseInt(speedId, 10) : null }),
         ...(pdsMin !== undefined && { pdsMin: parseInt(pdsMin, 10) }),
         ...(pdsMax !== undefined && { pdsMax: parseInt(pdsMax, 10) }),
         ...(price !== undefined && { price: parseFloat(price) }),
@@ -65,6 +79,9 @@ export async function PUT(
       include: {
         enveloppe: {
           select: { fullName: true, taille: true },
+        },
+        speed: {
+          select: { id: true, value: true, label: true },
         },
       },
     });

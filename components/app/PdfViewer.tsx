@@ -1,38 +1,119 @@
-import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'; // Adaptez selon votre lib d'icônes
-import { memo } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf'; // + vos imports d'icônes (ChevronLeft, etc.)
+import { ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
 
-// Utilisation d'une URL absolue pour une meilleure portabilité (si la configuration le permet)
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url,
-  ).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-// Définition propre des props
+// Address window dimensions interface (all values in mm)
+interface AddressWindow {
+  x: number;      // Position X from left edge in mm
+  y: number;      // Position Y from top edge in mm
+  width: number;  // Width in mm (addrL = largeur)
+  height: number; // Height in mm (addrH = hauteur)
+}
+
 interface PdfViewerProps {
   selectedPdf: { id: string; file: File; url: string; numPages: number } | null;
   currentPage: number;
   currentNumPages: number;
-  envelopeType: string; // On passe juste le string (ex: 'C6/5'), pas tout l'objet options
-  //showWindow: boolean;  // Calculé par le parent (activePreviewArea === 'source' && page === 1)
   showWindow?: boolean;
   fileName: string;
-  fileLabel: string;    // Ex: "Source" ou "Annexe #1"
+  fileLabel: string;
   onPageChange: (newPage: number) => void;
+  addressWindow?: AddressWindow | null;
+  envelopeLabel?: string;
 }
 
-const PdfViewer = memo(({ 
-  selectedPdf, 
-  currentPage, 
-  currentNumPages, 
-  envelopeType, 
-  showWindow, 
+// PDF render width in pixels (fixed)
+const RENDER_WIDTH = 300;
+
+// Conversion factor from idea.txt: 1mm = 72/25.4 points (PostScript points)
+const MM_TO_PT = 72 / 25.4;
+
+const PdfViewer = memo(({
+  selectedPdf,
+  currentPage,
+  currentNumPages,
+  showWindow,
   fileName,
   fileLabel,
-  onPageChange 
+  onPageChange,
+  addressWindow,
+  envelopeLabel = 'Zone adresse',
 }: PdfViewerProps) => {
 
-  // 1. Gestion du cas "Pas de PDF"
+  // State for original PDF page dimensions (in points at 72 DPI)
+  const [pageDimensions, setPageDimensions] = useState<{
+    widthPts: number;
+    heightPts: number;
+  } | null>(null);
+
+  // Calculate scale and overlay position using idea.txt logic
+  const { renderedHeight, scale, overlayStyle } = useMemo(() => {
+    if (!pageDimensions) {
+      return { renderedHeight: 0, scale: 1, overlayStyle: null };
+    }
+
+    const { widthPts, heightPts } = pageDimensions;
+
+    // Scale factor for rendering (same as idea.txt)
+    const renderScale = RENDER_WIDTH / widthPts;
+    const renderedHeightPx = heightPts * renderScale;
+
+    // Calculate overlay position in pixels using idea.txt formula:
+    // xPx = xMm * MM_TO_PT * scale
+    let overlay = null;
+    if (addressWindow) {
+      const xPx = addressWindow.x * MM_TO_PT * renderScale;
+      const yPx = addressWindow.y * MM_TO_PT * renderScale;
+      const wPx = addressWindow.width * MM_TO_PT * renderScale;
+      const hPx = addressWindow.height * MM_TO_PT * renderScale;
+
+      overlay = {
+        left: xPx,
+        top: yPx,
+        width: wPx,
+        height: hPx,
+      };
+    }
+
+    return {
+      renderedHeight: renderedHeightPx,
+      scale: renderScale,
+      overlayStyle: overlay,
+    };
+  }, [pageDimensions, addressWindow]);
+
+  // Callback when page loads - get ORIGINAL dimensions from viewport at scale 1
+  const handlePageLoad = (page: any) => {
+    // Get the original page dimensions (unscaled) - this is critical for correct overlay positioning
+    // react-pdf provides originalWidth/originalHeight for dimensions at scale 1 (72 DPI points)
+    // Fallback: if rendered at RENDER_WIDTH, calculate original from aspect ratio
+    let originalWidth = page.originalWidth;
+    let originalHeight = page.originalHeight;
+
+    // Fallback if originalWidth not available: use A4 default or calculate from aspect ratio
+    if (!originalWidth || !originalHeight) {
+      // If we have rendered dimensions, calculate aspect ratio and assume A4 width
+      const aspectRatio = page.height / page.width;
+      // A4 width in points = 595.28 (210mm * 72/25.4)
+      originalWidth = 595.28;
+      originalHeight = originalWidth * aspectRatio;
+    }
+
+    console.log('PDF Page dimensions:', {
+      rendered: { width: page.width, height: page.height },
+      original: { width: originalWidth, height: originalHeight },
+      scale: RENDER_WIDTH / originalWidth
+    });
+
+    setPageDimensions({
+      widthPts: originalWidth,
+      heightPts: originalHeight
+    });
+  };
+
+  // No PDF selected
   if (!selectedPdf) {
     return (
       <div className="h-[400px] bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 border border-slate-200">
@@ -44,65 +125,94 @@ const PdfViewer = memo(({
     );
   }
 
-  // 2. Calcul du style de la fenêtre (Dépend uniquement de envelopeType passé en prop)
-  const getWindowStyle = () => {
-    switch (envelopeType) {
-      case "C6/5": return { top: "22%", right: "10%", width: "45%", height: "14%" };
-      case "C5":   return { top: "25%", right: "10%", width: "45%", height: "18%" };
-      case "C4":   return { top: "15%", right: "10%", width: "45%", height: "15%" };
-      default: return { display: "none" };
-    }
-  };
-
   return (
     <div className="flex flex-col items-center">
-      <div className="relative w-full max-w-[300px] mx-auto mt-5">
-        
-        {/* LE COEUR DU PROBLÈME RÉSOLU : 
-            React-pdf ne se rechargera pas tant que 'selectedPdf.id' ne change pas 
-        */}
+      {/* PDF Container - same structure as idea.txt */}
+      <div
+        className="relative mx-auto mt-5 shadow-lg"
+        style={{
+          width: RENDER_WIDTH,
+          height: renderedHeight || 'auto',
+        }}
+      >
         <Document
-          key={selectedPdf.id} 
+          key={selectedPdf.id}
           file={selectedPdf.file}
-          loading={<div className="h-[400px] flex items-center justify-center">Chargement…</div>}
+          loading={
+            <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+              Chargement…
+            </div>
+          }
         >
           <Page
             key={`${selectedPdf.id}-${currentPage}`}
             pageNumber={currentPage}
-            width={300}
+            width={RENDER_WIDTH}
             renderTextLayer={false}
             renderAnnotationLayer={false}
+            onLoadSuccess={handlePageLoad}
           />
         </Document>
 
-        {/* Calque Fenêtre */}
-        {showWindow && (
+        {/* Window Overlay - CSS positioned div like idea.txt */}
+        {showWindow && overlayStyle && (
           <div
-            style={getWindowStyle()}
-            className="absolute border-2 border-dashed border-red-500 bg-red-500/10 backdrop-blur-[1px] rounded flex items-center justify-center pointer-events-none z-10 transition-all duration-300"
+            id="window-overlay"
+            className="absolute pointer-events-none z-10"
+            style={{
+              left: `${overlayStyle.left}px`,
+              top: `${overlayStyle.top}px`,
+              width: `${overlayStyle.width}px`,
+              height: `${overlayStyle.height}px`,
+              border: '2px dashed #ef4444',
+              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+            }}
           >
-            <span className="text-[10px] font-bold text-red-600 bg-white/90 px-1 shadow-sm whitespace-nowrap">
-              Fenêtre {envelopeType}
-            </span>
+            {/* Label at top of rectangle - like idea.txt */}
+            <div
+              className="absolute whitespace-nowrap"
+              style={{
+                top: '-24px',
+                left: 0,
+                background: '#ef4444',
+                color: 'white',
+                fontSize: '10px',
+                padding: '2px 6px',
+                borderRadius: '4px 4px 0 0',
+              }}
+            >
+              {envelopeLabel}
+            </div>
           </div>
         )}
 
-        <div className="absolute bottom-2 right-2 text-[10px] bg-black/50 text-white px-2 py-0.5 rounded backdrop-blur-sm z-20">
-          Page {currentPage} / {currentNumPages || '?'} 
+        {/* Dimension info overlay */}
+        {showWindow && addressWindow && pageDimensions && (
+          <div className="absolute top-1 left-1 text-[8px] bg-black/80 text-white px-1.5 py-1 rounded z-20 leading-tight font-mono">
+            <div>Bloc Adresse</div>
+            <div>X:{addressWindow.x} Y:{addressWindow.y}mm</div>
+            <div>L:{addressWindow.width} H:{addressWindow.height}mm</div>
+          </div>
+        )}
+
+        {/* Page number indicator */}
+        <div className="absolute bottom-2 right-2 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded z-20">
+          {currentPage} / {currentNumPages || '?'}
         </div>
       </div>
 
-      {/* Contrôles de pagination */}
+      {/* Pagination Controls */}
       <div className="flex items-center space-x-4 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 mt-4">
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage <= 1}
           className="p-1 hover:bg-slate-100 rounded-full disabled:opacity-30 disabled:cursor-not-allowed text-slate-700"
+          aria-label="Page précédente"
         >
           <ChevronLeft size={20} />
         </button>
 
-        <span className="text-sm font-medium tabular-nums text-slate-700">
+        <span className="text-sm font-medium tabular-nums text-slate-700 min-w-[60px] text-center">
           {currentNumPages ? `${currentPage} / ${currentNumPages}` : "--"}
         </span>
 
@@ -110,17 +220,20 @@ const PdfViewer = memo(({
           onClick={() => onPageChange(Math.min(currentNumPages, currentPage + 1))}
           disabled={currentPage >= currentNumPages}
           className="p-1 hover:bg-slate-100 rounded-full disabled:opacity-30 disabled:cursor-not-allowed text-slate-700"
+          aria-label="Page suivante"
         >
           <ChevronRight size={20} />
         </button>
       </div>
 
-      <div className="text-xs text-slate-500 mt-2">
+      {/* File info */}
+      <div className="text-xs text-slate-500 mt-2 text-center max-w-[280px] truncate">
         {fileName} (<span className="font-semibold">{fileLabel}</span>)
       </div>
     </div>
   );
-// Le second argument de memo est optionnel, mais par sécurité, on laisse React faire la comparaison superficielle (shallow)
 });
+
+PdfViewer.displayName = 'PdfViewer';
 
 export default PdfViewer;

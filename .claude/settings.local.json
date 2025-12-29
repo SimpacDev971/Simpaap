@@ -7,7 +7,8 @@
       "Bash(dir \"C:\\\\Users\\\\Nicolas\\\\Documents\\\\Developpement\\\\simpaap\\\\components\\\\app\\\\print\" /S)",
       "Bash(cat:*)",
       "Bash(dir \"C:\\\\Users\\\\Nicolas\\\\Documents\\\\Developpement\\\\simpaap\\\\app\")",
-      "Bash(npx shadcn@latest add:*)"
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

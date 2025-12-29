@@ -3,15 +3,16 @@
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import AffranchissementsCrud from "./AffranchissementsCrud";
+import AffranchissementSpeedsCrud from "./AffranchissementSpeedsCrud";
 import EnveloppesCrud from "./EnveloppesCrud";
 import PrintOptionsCrud from "./shared/PrintOptionsCrud";
 
-type SubTabType = "colors" | "sides" | "enveloppes" | "affranchissements";
+type SubTabType = "colors" | "sides" | "enveloppes" | "speeds" | "affranchissements";
 
 interface SubTabConfig {
   id: SubTabType;
   label: string;
-  component: "PrintOptionsCrud" | "EnveloppesCrud" | "AffranchissementsCrud";
+  component: "PrintOptionsCrud" | "EnveloppesCrud" | "AffranchissementsCrud" | "AffranchissementSpeedsCrud";
   apiEndpoint?: string;
   hasDescription?: boolean;
 }
@@ -20,6 +21,7 @@ const SUB_TABS: SubTabConfig[] = [
   { id: "colors", label: "Couleurs", component: "PrintOptionsCrud", apiEndpoint: "/api/print-options/colors", hasDescription: false },
   { id: "sides", label: "Côtés", component: "PrintOptionsCrud", apiEndpoint: "/api/print-options/sides", hasDescription: false },
   { id: "enveloppes", label: "Enveloppes", component: "EnveloppesCrud" },
+  { id: "speeds", label: "Vitesses", component: "AffranchissementSpeedsCrud" },
   { id: "affranchissements", label: "Affranchissements", component: "AffranchissementsCrud" },
 ];
 
@@ -34,6 +36,8 @@ export default function SimpaapCrud() {
     switch (currentTabConfig.component) {
       case "EnveloppesCrud":
         return <EnveloppesCrud />;
+      case "AffranchissementSpeedsCrud":
+        return <AffranchissementSpeedsCrud />;
       case "AffranchissementsCrud":
         return <AffranchissementsCrud />;
       case "PrintOptionsCrud":
@@ -52,7 +56,8 @@ export default function SimpaapCrud() {
   return (
     <div className="space-y-6">
       <div className="text-sm text-muted-foreground">
-        Gérez les options d'impression globales. Ces options peuvent ensuite être assignées aux clients via leurs paramètres.
+      <h2 className="text-2xl font-semibold text-foreground">Gestion des options d'impression & postales</h2>
+        Ces options peuvent ensuite être assignées aux clients via leurs paramètres.
       </div>
 
       {/* Sub-tabs */}

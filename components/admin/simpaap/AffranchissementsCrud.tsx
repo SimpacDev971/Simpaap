@@ -26,11 +26,19 @@ interface Enveloppe {
   taille: string;
 }
 
+interface Speed {
+  id: number;
+  value: string;
+  label: string;
+  isActive: boolean;
+}
+
 interface Affranchissement {
   id: number;
   fullName: string;
   name: string;
   env_taille: string;
+  speedId: number | null;
   pdsMin: number;
   pdsMax: number;
   price: number;
@@ -39,12 +47,18 @@ interface Affranchissement {
     fullName: string;
     taille: string;
   };
+  speed?: {
+    id: number;
+    value: string;
+    label: string;
+  };
 }
 
 interface AffranchissementFormData {
   fullName: string;
   name: string;
   env_taille: string;
+  speedId: string;
   pdsMin: string;
   pdsMax: string;
   price: string;
@@ -55,6 +69,7 @@ const defaultFormData: AffranchissementFormData = {
   fullName: "",
   name: "",
   env_taille: "",
+  speedId: "",
   pdsMin: "",
   pdsMax: "",
   price: "",
@@ -64,32 +79,37 @@ const defaultFormData: AffranchissementFormData = {
 export default function AffranchissementsCrud() {
   const [affranchissements, setAffranchissements] = useState<Affranchissement[]>([]);
   const [enveloppes, setEnveloppes] = useState<Enveloppe[]>([]);
+  const [speeds, setSpeeds] = useState<Speed[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editingAffranchissement, setEditingAffranchissement] = useState<Affranchissement | null>(null);
   const [deletingAffranchissement, setDeletingAffranchissement] = useState<Affranchissement | null>(null);
   const [filterEnvTaille, setFilterEnvTaille] = useState<string>("all");
+  const [filterSpeedId, setFilterSpeedId] = useState<string>("all");
 
   const fetchData = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [affRes, envRes] = await Promise.all([
+      const [affRes, envRes, speedRes] = await Promise.all([
         fetch("/api/print-options/affranchissements"),
         fetch("/api/print-options/enveloppes"),
+        fetch("/api/print-options/speeds"),
       ]);
 
-      if (!affRes.ok || !envRes.ok) throw new Error("Erreur lors du chargement");
+      if (!affRes.ok || !envRes.ok || !speedRes.ok) throw new Error("Erreur lors du chargement");
 
-      const [affData, envData] = await Promise.all([
+      const [affData, envData, speedData] = await Promise.all([
         affRes.json(),
         envRes.json(),
+        speedRes.json(),
       ]);
 
       setAffranchissements(affData);
       setEnveloppes(envData);
+      setSpeeds(speedData);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur inconnue";
       setError(message);
@@ -109,9 +129,12 @@ export default function AffranchissementsCrud() {
     setDeletingAffranchissement(null);
   };
 
-  const filteredAffranchissements = filterEnvTaille === "all"
-    ? affranchissements
-    : affranchissements.filter((a) => a.env_taille === filterEnvTaille);
+  const filteredAffranchissements = affranchissements.filter((a) => {
+    const matchEnv = filterEnvTaille === "all" || a.env_taille === filterEnvTaille;
+    const matchSpeed = filterSpeedId === "all" ||
+      (filterSpeedId === "none" ? a.speedId === null : a.speedId === parseInt(filterSpeedId));
+    return matchEnv && matchSpeed;
+  });
 
   if (loading) {
     return (
@@ -124,13 +147,13 @@ export default function AffranchissementsCrud() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <h3 className="text-lg font-semibold">Affranchissements</h3>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <Label className="text-sm">Filtrer par enveloppe:</Label>
+            <Label className="text-sm">Enveloppe:</Label>
             <Select value={filterEnvTaille} onValueChange={setFilterEnvTaille}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[160px]">
                 <SelectValue placeholder="Toutes" />
               </SelectTrigger>
               <SelectContent>
@@ -138,6 +161,23 @@ export default function AffranchissementsCrud() {
                 {enveloppes.map((env) => (
                   <SelectItem key={env.id} value={env.taille}>
                     {env.taille} - {env.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-sm">Vitesse:</Label>
+            <Select value={filterSpeedId} onValueChange={setFilterSpeedId}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Toutes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes</SelectItem>
+                <SelectItem value="none">Non assignée</SelectItem>
+                {speeds.map((speed) => (
+                  <SelectItem key={speed.id} value={String(speed.id)}>
+                    {speed.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -163,6 +203,7 @@ export default function AffranchissementsCrud() {
               <th className="text-left p-3 font-medium">Code</th>
               <th className="text-left p-3 font-medium">Nom complet</th>
               <th className="text-left p-3 font-medium">Enveloppe</th>
+              <th className="text-left p-3 font-medium">Vitesse</th>
               <th className="text-left p-3 font-medium">Poids (g)</th>
               <th className="text-left p-3 font-medium">Prix</th>
               <th className="text-left p-3 font-medium">Statut</th>
@@ -172,7 +213,7 @@ export default function AffranchissementsCrud() {
           <tbody>
             {filteredAffranchissements.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-8 text-muted-foreground">
+                <td colSpan={8} className="text-center py-8 text-muted-foreground">
                   Aucun affranchissement configuré
                 </td>
               </tr>
@@ -190,9 +231,18 @@ export default function AffranchissementsCrud() {
                     )}
                   </td>
                   <td className="p-3 text-sm">
+                    {aff.speed ? (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {aff.speed.label}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-sm">
                     {aff.pdsMin}g - {aff.pdsMax}g
                   </td>
-                  <td className="p-3 font-medium">{Number(aff.price).toFixed(4)}€</td>
+                  <td className="p-3 font-medium">{(Math.floor(Number(aff.price) * 100) / 100).toFixed(2)}€</td>
                   <td className="p-3">
                     <span
                       className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -235,6 +285,7 @@ export default function AffranchissementsCrud() {
           </DialogHeader>
           <AffranchissementForm
             enveloppes={enveloppes}
+            speeds={speeds}
             onSuccess={handleSuccess}
             onCancel={() => setShowCreate(false)}
           />
@@ -254,6 +305,7 @@ export default function AffranchissementsCrud() {
             <AffranchissementForm
               initialData={editingAffranchissement}
               enveloppes={enveloppes}
+              speeds={speeds}
               onSuccess={handleSuccess}
               onCancel={() => setEditingAffranchissement(null)}
             />
@@ -287,11 +339,13 @@ export default function AffranchissementsCrud() {
 function AffranchissementForm({
   initialData,
   enveloppes,
+  speeds,
   onSuccess,
   onCancel,
 }: {
   initialData?: Affranchissement;
   enveloppes: Enveloppe[];
+  speeds: Speed[];
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -301,6 +355,7 @@ function AffranchissementForm({
           fullName: initialData.fullName,
           name: initialData.name,
           env_taille: initialData.env_taille,
+          speedId: initialData.speedId ? String(initialData.speedId) : "",
           pdsMin: String(initialData.pdsMin),
           pdsMax: String(initialData.pdsMax),
           price: String(initialData.price),
@@ -387,15 +442,36 @@ function AffranchissementForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="fullName">Nom complet *</Label>
-        <Input
-          id="fullName"
-          value={formData.fullName}
-          onChange={(e) => handleChange("fullName", e.target.value)}
-          placeholder="Ex: ECOPLI Standard"
-          required
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="fullName">Nom complet *</Label>
+          <Input
+            id="fullName"
+            value={formData.fullName}
+            onChange={(e) => handleChange("fullName", e.target.value)}
+            placeholder="Ex: ECOPLI Standard"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="speedId">Vitesse</Label>
+          <Select
+            value={formData.speedId}
+            onValueChange={(value) => handleChange("speedId", value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Sélectionner..." />
+            </SelectTrigger>
+            <SelectContent>
+              {speeds.filter(s => s.isActive).map((speed) => (
+                <SelectItem key={speed.id} value={String(speed.id)}>
+                  {speed.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -428,10 +504,10 @@ function AffranchissementForm({
           <Input
             id="price"
             type="number"
-            step="0.0001"
+            step="0.01"
             value={formData.price}
             onChange={(e) => handleChange("price", e.target.value)}
-            placeholder="1.2000"
+            placeholder="1.20"
             required
           />
         </div>

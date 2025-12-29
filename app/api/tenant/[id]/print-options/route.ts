@@ -20,6 +20,8 @@ export async function GET(
       include: {
         tenant_print_color: { include: { print_color: true } },
         tenant_print_side: { include: { print_side: true } },
+        tenant_enveloppe: { include: { enveloppe: true } },
+        tenant_speed: { include: { speed: true } },
       },
     });
 
@@ -30,6 +32,8 @@ export async function GET(
     return NextResponse.json({
       colors: tenant.tenant_print_color.map(a => a.print_color),
       sides: tenant.tenant_print_side.map(a => a.print_side),
+      enveloppes: tenant.tenant_enveloppe.map(a => a.enveloppe),
+      speeds: tenant.tenant_speed.map(a => a.speed),
     });
   } catch (error) {
     console.error('Error fetching tenant print options:', error);
@@ -40,7 +44,7 @@ export async function GET(
 /**
  * PUT /api/tenant/[id]/print-options
  * Met à jour les options d'impression assignées au tenant
- * Body: { colorIds?: number[], sideIds?: number[] }
+ * Body: { colorIds?: number[], sideIds?: number[], enveloppeIds?: number[], speedIds?: number[] }
  * Requires SUPERADMIN or ADMIN of the tenant
  */
 export async function PUT(
@@ -57,6 +61,9 @@ export async function PUT(
 
   // SUPERADMIN can update any tenant, ADMIN can only update their own
   if (session.user.role !== 'SUPERADMIN') {
+    if (!session.user.tenantSlug) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const userTenant = await prisma.tenant.findUnique({
       where: { subdomain: session.user.tenantSlug },
     });
@@ -67,7 +74,7 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { colorIds, sideIds } = body;
+    const { colorIds, sideIds, enveloppeIds, speedIds } = body;
 
     // Find tenant to get subdomain for cache invalidation
     const tenant = await prisma.tenant.findUnique({
@@ -97,6 +104,26 @@ export async function PUT(
         if (sideIds.length > 0) {
           await tx.tenant_print_side.createMany({
             data: sideIds.map((printSideId: number) => ({ tenantId: id, printSideId })),
+          });
+        }
+      }
+
+      // Update enveloppes if provided
+      if (enveloppeIds !== undefined) {
+        await tx.tenant_enveloppe.deleteMany({ where: { tenantId: id } });
+        if (enveloppeIds.length > 0) {
+          await tx.tenant_enveloppe.createMany({
+            data: enveloppeIds.map((enveloppeId: number) => ({ tenantId: id, enveloppeId })),
+          });
+        }
+      }
+
+      // Update speeds if provided
+      if (speedIds !== undefined) {
+        await tx.tenant_speed.deleteMany({ where: { tenantId: id } });
+        if (speedIds.length > 0) {
+          await tx.tenant_speed.createMany({
+            data: speedIds.map((speedId: number) => ({ tenantId: id, speedId })),
           });
         }
       }
