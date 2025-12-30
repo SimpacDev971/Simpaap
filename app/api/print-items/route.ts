@@ -119,8 +119,12 @@ export async function POST(req: NextRequest) {
 
     const printItem = await prisma.print_item.create({
       data: {
+        numTraitement: BigInt(rawData?.meta?.numTraitement || Date.now()),
         tenantId: tenant.id,
         userId: session.user.id,
+        totalPages: rawData?.meta?.totalPages || 0,
+        totalRecipients: rawData?.productionOptions?.postage?.totalLetters || 0,
+        totalCost: rawData?.productionOptions?.postage?.totalCost || null,
         rawData,
         status: 'pending',
       },

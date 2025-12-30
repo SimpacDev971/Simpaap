@@ -187,13 +187,13 @@ const PdfViewer = memo(({
         )}
 
         {/* Dimension info overlay */}
-        {showWindow && addressWindow && pageDimensions && (
+        {/*{showWindow && addressWindow && pageDimensions && (
           <div className="absolute top-1 left-1 text-[8px] bg-black/80 text-white px-1.5 py-1 rounded z-20 leading-tight font-mono">
             <div>Bloc Adresse</div>
             <div>X:{addressWindow.x} Y:{addressWindow.y}mm</div>
             <div>L:{addressWindow.width} H:{addressWindow.height}mm</div>
           </div>
-        )}
+        )}*/}
 
         {/* Page number indicator */}
         <div className="absolute bottom-2 right-2 text-[10px] bg-black/60 text-white px-2 py-0.5 rounded z-20">

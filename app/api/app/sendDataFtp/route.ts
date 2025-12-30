@@ -66,14 +66,18 @@ export async function POST(request: NextRequest) {
               if (tenant) {
                   const printItem = await prisma.print_item.create({
                       data: {
+                          numTraitement: BigInt(metadata.meta?.numTraitement || Date.now()),
                           tenantId: tenant.id,
                           userId: session.user.id,
+                          totalPages: metadata.meta?.totalPages || 0,
+                          totalRecipients: metadata.productionOptions?.postage?.totalLetters || 0,
+                          totalCost: metadata.productionOptions?.postage?.totalCost || null,
                           rawData: metadata,
                           status: 'pending',
                       },
                   });
                   printItemId = printItem.id;
-                  console.log(`✓ print_item created: ${printItemId}`);
+                  console.log(`✓ print_item created: ${printItemId} (numTraitement: ${metadata.meta?.numTraitement})`);
               }
           }
       }

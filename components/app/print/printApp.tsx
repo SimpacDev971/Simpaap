@@ -1,7 +1,7 @@
 'use client'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { usePrintOptionsContext } from "@/contexts/PrintOptionsContext";
 import {
-  AlertCircle,
   Check,
   FileText,
   Layers,
@@ -10,8 +10,10 @@ import {
   Printer,
   Trash2,
   Truck,
-  Upload
+  Upload,
+  ShoppingBasket
 } from 'lucide-react';
+import { useSession } from "next-auth/react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { pdfjs } from "react-pdf";
 import { Button } from "../../ui/button";
@@ -85,11 +87,17 @@ interface PDFFile {
   Courrier :  boolean
 }
 
-const WEIGHT_PER_PAGE_GRAMS = 5; // 1 page = 5 grams
+const WEIGHT_PER_SHEET_GRAMS = 5; // 1 sheet (feuille) = 5 grams
 
 // --- Main Application Component ---
 
 export default function PrintApp() {
+  // Session pour récupérer les informations utilisateur
+  const { data: session } = useSession();
+
+  // Print options from cached context
+  const { data: printOptions, isLoading: loadingOptions } = usePrintOptionsContext();
+
   // NOUVEAUX ÉTATS
   const [sourceFile, setSourceFile] = useState<PDFFile | null>(null);
   const [annexes, setAnnexes] = useState<PDFFile[]>([]);
@@ -102,20 +110,21 @@ export default function PrintApp() {
   const [currentNumPages, setCurrentNumPages] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeStep, setActiveStep] = useState<'upload' | 'config' | 'success'>('config');
-  const [loadingOptions, setLoadingOptions] = useState(true);
 
-  // Tenant-authorized print options
-  const [colors, setColors] = useState<PrintColor[]>([]);
+  // Selected print options (initialized from cached context)
   const [selectedColor, setSelectedColor] = useState<PrintColor | null>(null);
-  const [sides, setSides] = useState<PrintSide[]>([]);
   const [selectedSide, setSelectedSide] = useState<PrintSide | null>(null);
-  const [enveloppes, setEnveloppes] = useState<Enveloppe[]>([]);
   const [selectedEnveloppe, setSelectedEnveloppe] = useState<Enveloppe | null>(null);
-  const [speeds, setSpeeds] = useState<Speed[]>([]);
   const [selectedSpeed, setSelectedSpeed] = useState<Speed | null>(null);
-  const [separation, setSeparation] = useState<number>(1); // Pages par courrier (publipostage)
+  const [separation, setSeparation] = useState<number>(1); // Pages par destinataire (publipostage)
   const [calculatedRate, setCalculatedRate] = useState<PostageRate | null>(null);
   const [loadingRate, setLoadingRate] = useState(false);
+
+  // Derived state from cached print options
+  const colors = printOptions?.colors || [];
+  const sides = printOptions?.sides || [];
+  const enveloppes = printOptions?.enveloppes || [];
+  const speeds = printOptions?.speeds || [];
 
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const annexeFileInputRef = useRef<HTMLInputElement>(null);
@@ -143,9 +152,22 @@ export default function PrintApp() {
     return separation + annexePagesTotal;
   }, [separation, annexePagesTotal]);
 
+  // Calculate sheets based on print side (recto vs recto-verso)
+  // Recto: 1 page = 1 sheet
+  // Recto-verso: 2 pages = 1 sheet (rounded up if odd number of pages)
+  const sheetsPerEnvelope = useMemo(() => {
+    const isRectoVerso = selectedSide?.value === 'recto_verso';
+    if (isRectoVerso) {
+      // Recto-verso: divide by 2, round up for odd pages
+      return Math.ceil(pagesPerEnvelope / 2);
+    }
+    // Recto: 1 page = 1 sheet
+    return pagesPerEnvelope;
+  }, [pagesPerEnvelope, selectedSide]);
+
   const weightPerEnvelope = useMemo(() => {
-    return pagesPerEnvelope * WEIGHT_PER_PAGE_GRAMS;
-  }, [pagesPerEnvelope]);
+    return sheetsPerEnvelope * WEIGHT_PER_SHEET_GRAMS;
+  }, [sheetsPerEnvelope]);
 
   const totalPostageCost = useMemo(() => {
     if (!calculatedRate) return 0;
@@ -182,49 +204,24 @@ export default function PrintApp() {
     setCurrentPage(1);
   }, [selectedPdfId, activePreviewArea]);
 
-  // 4. Fetch tenant-authorized print options on mount
+  // 4. Initialize selected options when print options are loaded from cache
   useEffect(() => {
-    const fetchTenantOptions = async () => {
-      setLoadingOptions(true);
-      try {
-        // Fetch tenant-specific print options
-        const res = await fetch('/api/print-options/tenant');
-
-        if (res.ok) {
-          const data = await res.json();
-
-          // Colors
-          if (data.colors && data.colors.length > 0) {
-            setColors(data.colors);
-            setSelectedColor(data.colors[0]);
-          }
-
-          // Sides
-          if (data.sides && data.sides.length > 0) {
-            setSides(data.sides);
-            setSelectedSide(data.sides[0]);
-          }
-
-          // Enveloppes
-          if (data.enveloppes && data.enveloppes.length > 0) {
-            setEnveloppes(data.enveloppes);
-            setSelectedEnveloppe(data.enveloppes[0]);
-          }
-
-          // Speeds
-          if (data.speeds && data.speeds.length > 0) {
-            setSpeeds(data.speeds);
-            setSelectedSpeed(data.speeds[0]);
-          }
-        }
-      } catch (error) {
-        console.error('Erreur lors du chargement des options:', error);
-      } finally {
-        setLoadingOptions(false);
+    if (printOptions) {
+      // Initialize with first option if not already set
+      if (printOptions.colors.length > 0 && !selectedColor) {
+        setSelectedColor(printOptions.colors[0]);
       }
-    };
-    fetchTenantOptions();
-  }, []);
+      if (printOptions.sides.length > 0 && !selectedSide) {
+        setSelectedSide(printOptions.sides[0]);
+      }
+      if (printOptions.enveloppes.length > 0 && !selectedEnveloppe) {
+        setSelectedEnveloppe(printOptions.enveloppes[0]);
+      }
+      if (printOptions.speeds.length > 0 && !selectedSpeed) {
+        setSelectedSpeed(printOptions.speeds[0]);
+      }
+    }
+  }, [printOptions, selectedColor, selectedSide, selectedEnveloppe, selectedSpeed]);
 
   // 5. Calculate postage when relevant inputs change
   useEffect(() => {
@@ -293,6 +290,8 @@ export default function PrintApp() {
     setSourceFile(newSourceFile);
     setSelectedPdfId(newSourceFile.id);
     setActivePreviewArea('source');
+    // Par défaut: toutes les pages pour 1 destinataire
+    setSeparation(numPages);
 
   }, [sourceFile]);
 
@@ -471,8 +470,10 @@ export default function PrintApp() {
       meta: {
         flux:'simpaap',
         submissionDate: new Date().toISOString(),
-        client: 'session.user.tenantSlug',
-        user: 'session.user.email',
+        numTraitement : uniqueKey,
+        client: session?.user?.tenantSlug || 'unknown',
+        user: session?.user?.email || 'unknown',
+        userName: session?.user?.name || null,
         totalFiles: filesToSend.length,
         totalPages: totalPages,
         uniqueKey : uniqueKey,
@@ -514,6 +515,7 @@ export default function PrintApp() {
           separation: separation,
           totalLetters: totalLetters,
           pagesPerEnvelope: pagesPerEnvelope,
+          sheetsPerEnvelope: sheetsPerEnvelope,
           weightPerEnvelope: weightPerEnvelope,
           speed: selectedSpeed ? {
             id: selectedSpeed.id,
@@ -675,27 +677,50 @@ export default function PrintApp() {
     </div>
   );
 
-  // --- Success View (inchangé) ---
+  // --- Success View ---
   if (activeStep === 'success') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check size={32} strokeWidth={3} />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Courrier envoyé !</h2>
-          <p className="text-slate-600 mb-2">
-            {totalPages} page{totalPages > 1 ? 's ont' : ' a'} été transmis ({1 + annexes.length} document{1 + annexes.length > 1 ? 's' : ''}).
-          </p>
-          <p className="text-sm text-slate-500 mb-8">
-            Total: {totalPages} page{totalPages > 1 ? 's' : ''}
-          </p>
-          <button 
-            onClick={() => { handleClearAllFiles(); setActiveStep('config'); }}
-            className="bg-blue-600 text-white px-6 py-2 rounded-md font-medium hover:bg-blue-700 w-full"
-          >
-            Nouveau dépôt
-          </button>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center pb-2">
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check size={32} strokeWidth={3} />
+            </div>
+            <CardTitle className="text-2xl">Envoi confirmé !</CardTitle>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <div className="space-y-1">
+              <p className="text-muted-foreground">
+                {totalLetters} destinataire{totalLetters > 1 ? 's' : ''} • {totalPages} page{totalPages > 1 ? 's' : ''}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {1 + annexes.length} document{1 + annexes.length > 1 ? 's' : ''} transmis
+              </p>
+            </div>
+
+            <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Destinataires</span>
+                <span className="font-medium">{totalLetters}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Affranchissement</span>
+                <span className="font-medium">{calculatedRate?.fullName || '-'}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t pt-2">
+                <span className="font-semibold">Total estimé</span>
+                <span className="font-bold text-green-600 dark:text-green-400">{totalPostageCost.toFixed(2)} € HT</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => { handleClearAllFiles(); setActiveStep('config'); }}
+              className="w-full"
+              size="lg"
+            >
+              Nouveau dépôt
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );
@@ -881,7 +906,7 @@ export default function PrintApp() {
         </div>
 
         <div>
-          <Label htmlFor="separation">Pages par courrier (publipostage)</Label>
+          <Label htmlFor="separation">Pages par destinataire (publipostage)</Label>
           <Input
             id="separation"
             type="number"
@@ -891,7 +916,7 @@ export default function PrintApp() {
             className="w-full"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Nombre de pages du document source par courrier
+            Nombre de pages du document source par destinataire
           </p>
         </div>
       </div>
@@ -912,7 +937,7 @@ export default function PrintApp() {
               )}
             </div>
             <p className="text-lg font-bold text-green-600">
-              {calculatedRate.price.toFixed(4)} € / courrier
+              {calculatedRate.price.toFixed(4)} € / destinataire
             </p>
           </div>
         ) : (
@@ -920,27 +945,6 @@ export default function PrintApp() {
             Aucun tarif trouvé pour ce poids ({weightPerEnvelope}g){selectedSpeed && ` et cette vitesse (${selectedSpeed.label})`}
           </p>
         )}
-      </div>
-
-      <hr className="border-slate-200" />
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        <div className="text-center p-3 bg-muted/50 rounded-lg">
-          <p className="text-muted-foreground">Courriers</p>
-          <p className="text-xl font-bold">{totalLetters}</p>
-        </div>
-        <div className="text-center p-3 bg-muted/50 rounded-lg">
-          <p className="text-muted-foreground">Pages/courrier</p>
-          <p className="text-xl font-bold">{pagesPerEnvelope}</p>
-        </div>
-        <div className="text-center p-3 bg-muted/50 rounded-lg">
-          <p className="text-muted-foreground">Poids/courrier</p>
-          <p className="text-xl font-bold">{weightPerEnvelope}g</p>
-        </div>
-        <div className="text-center p-3 bg-green-50 rounded-lg">
-          <p className="text-muted-foreground">Total affranchissement</p>
-          <p className="text-xl font-bold text-green-600">{totalPostageCost.toFixed(2)} €</p>
-        </div>
       </div>
     </Card>
   </section>
@@ -983,23 +987,22 @@ export default function PrintApp() {
     />
 
     {/* Récapitulatif */}
-    <CardHeader className="pt-6 border-t">
-     <CardTitle className="text-sm font-semibold">Récapitulatif</CardTitle>
-    </CardHeader>
+    <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+      <ShoppingBasket size={20} className="text-blue-600" />
+      Récapitulatif
+    </h2>
+    
 
     <div className="space-y-2 text-sm">
       <div className="flex justify-between">
-        <span>Page(s) Source</span>
-        <span className="font-medium">{sourceFile ? sourceFile.numPages : 'Non chargé'}</span>
+        <span>Destinataires</span>
+        <span className="font-medium">{totalLetters || '-'}</span>
       </div>
       <div className="flex justify-between">
         <span>Séparation</span>
-        <span className="font-medium">{separation} page{separation > 1 ? 's' : ''}/courrier</span>
+        <span className="font-medium">{separation} page{separation > 1 ? 's' : ''}/dest.</span>
       </div>
-      <div className="flex justify-between">
-        <span>Nb Courriers</span>
-        <span className="font-medium">{totalLetters || '-'}</span>
-      </div>
+      
       <div className="flex justify-between">
         <span>Annexes</span>
         <span className="font-medium">{annexes.length} ({annexePagesTotal} pages)</span>
@@ -1012,10 +1015,14 @@ export default function PrintApp() {
       </div>
       <div className="flex justify-between">
         <span>Enveloppe</span>
-        <span className="font-medium">{selectedEnveloppe?.taille || '-'}</span>
+        <span className="font-medium">{selectedEnveloppe?.fullName || '-'}</span>
       </div>
       <div className="flex justify-between">
-        <span>Poids/courrier</span>
+        <span>Feuilles/dest.</span>
+        <span className="font-medium">{sheetsPerEnvelope}</span>
+      </div>
+      <div className="flex justify-between">
+        <span>Poids/dest.</span>
         <span className="font-medium">{weightPerEnvelope}g</span>
       </div>
       <div className="flex justify-between">
@@ -1038,7 +1045,7 @@ export default function PrintApp() {
 
     <div className="hidden md:flex flex-col">
       <p className="text-sm text-muted-foreground">
-        {totalLetters} courrier{totalLetters > 1 ? 's' : ''} • {pagesPerEnvelope} page{pagesPerEnvelope > 1 ? 's' : ''}/courrier • {weightPerEnvelope}g
+        {totalLetters} Destinataire{totalLetters > 1 ? 's' : ''} • {pagesPerEnvelope} page{pagesPerEnvelope > 1 ? 's' : ''} ({sheetsPerEnvelope} feuille{sheetsPerEnvelope > 1 ? 's' : ''}) • {weightPerEnvelope}g
       </p>
       <p className="font-semibold text-foreground">
         Total affranchissement : {totalPostageCost.toFixed(2)} € HT

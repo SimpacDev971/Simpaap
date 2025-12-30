@@ -241,16 +241,21 @@ model tenant_speed {
 // ==========================================
 
 model print_item {
-  id        String    @id @default(cuid())
-  tenantId  String    @db.VarChar(50)
-  userId    String    @db.VarChar(50)
-  createdAt DateTime  @default(now())
-  sendAt    DateTime?
-  status    String    @default("pending")
-  rawData   Json
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  numTraitement  BigInt    @unique
+  tenantId       String    @db.VarChar(50)
+  userId         String    @db.VarChar(50)
+  createdAt      DateTime  @default(now())
+  sendAt         DateTime?
+  status         String    @default("pending")
+  totalPages     Int       @default(0)
+  totalRecipients Int      @default(0)
+  totalCost      Decimal?  @db.Decimal(10, 4)
+  rawData        Json
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, createdAt])
   @@index([userId])
+  @@index([numTraitement])
 }

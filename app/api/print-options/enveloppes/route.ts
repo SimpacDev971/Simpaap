@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { invalidateAllPrintOptionsCache } from '@/lib/cache';
 
 /**
  * GET /api/print-options/enveloppes
@@ -63,6 +64,9 @@ export async function POST(req: NextRequest) {
         isActive,
       },
     });
+
+    // Invalidate print options cache (envelopes are global, affect all tenants)
+    invalidateAllPrintOptionsCache();
 
     return NextResponse.json(enveloppe, { status: 201 });
   } catch (error: unknown) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { PrintOptionsProvider } from "@/contexts/PrintOptionsContext";
 import { TenantApplicationsProvider } from "@/contexts/TenantApplicationsContext";
 import { useSubdomain } from "@/hooks/useSubdomain";
 import { SessionRefresh } from "@/lib/auth/SessionRefresh";
@@ -79,10 +80,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <ThemeProvider>
       <TenantApplicationsProvider>
-        <SessionRefresh />
-        <AuthenticatedLayout subdomain={subdomain}>
-          {children}
-        </AuthenticatedLayout>
+        <PrintOptionsProvider>
+          <SessionRefresh />
+          <AuthenticatedLayout subdomain={subdomain}>
+            {children}
+          </AuthenticatedLayout>
+        </PrintOptionsProvider>
       </TenantApplicationsProvider>
     </ThemeProvider>
   );

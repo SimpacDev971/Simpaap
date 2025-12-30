@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Mailbox Window Overlay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        .pdf-container {
+            position: relative;
+            display: inline-block;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        #window-overlay {
+            position: absolute;
+            pointer-events: none;
+            border: 2px dashed #ef4444;
+            background-color: rgba(239, 68, 68, 0.15);
+            z-index: 10;
+            display: none;
+        }
+        #window-label {
+            position: absolute;
+            top: -24px;
+            left: 0;
+            background: #ef4444;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px 4px 0 0;
+            white-space: nowrap;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
+
+    <div class="max-w-6xl mx-auto p-6">
+        <header class="mb-8 border-b pb-6">
+            <h1 class="text-3xl font-bold text-slate-800">Mailbox Window Validator</h1>
+            <p class="text-slate-500">Upload a PDF to verify if address fields align with the envelope window.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Sidebar Controls -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <label class="block text-sm font-semibold mb-2">1. Select PDF</label>
+                    <input type="file" id="file-input" accept="application/pdf" 
+                           class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"/>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 space-y-4">
+                    <h2 class="text-sm font-semibold border-b pb-2">2. Window Dimensions (mm)</h2>
+                    
+                    <div>
+                        <label class="text-xs text-slate-500 block uppercase tracking-wider">Distance from Left</label>
+                        <input type="number" id="win-x" value="20" class="w-full mt-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-500 block uppercase tracking-wider">Distance from Top</label>
+                        <input type="number" id="win-y" value="45" class="w-full mt-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs text-slate-500 block uppercase tracking-wider">Width</label>
+                            <input type="number" id="win-w" value="90" class="w-full mt-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500 block uppercase tracking-wider">Height</label>
+                            <input type="number" id="win-h" value="45" class="w-full mt-1 p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+
+                    <button id="apply-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition-colors shadow-sm">
+                        Update Overlay
+                    </button>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                    <h3 class="text-amber-800 text-xs font-bold uppercase mb-1">How it works</h3>
+                    <p class="text-xs text-amber-700 leading-relaxed">
+                        The overlay is calculated using 72 DPI (PostScript points). 1mm ≈ 2.83pt. This ensures the window size is accurate to real-world dimensions.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Main Viewer -->
+            <div class="lg:col-span-3 flex justify-center">
+                <div id="viewer-wrapper" class="hidden">
+                    <div class="pdf-container" id="pdf-container">
+                        <canvas id="pdf-canvas"></canvas>
+                        <div id="window-overlay">
+                            <div id="window-label text-white">RESERVED AREA</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 flex items-center justify-between text-sm text-slate-500">
+                        <span id="page-info">Page 1</span>
+                        <div class="space-x-2">
+                            <button id="prev-page" class="px-3 py-1 bg-white border rounded hover:bg-slate-50">Previous</button>
+                            <button id="next-page" class="px-3 py-1 bg-white border rounded hover:bg-slate-50">Next</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="placeholder" class="w-full h-96 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center text-slate-400">
+                    <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p>Upload a document to start</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let pdfDoc = null;
+        let pageNum = 1;
+        let scale = 1.5; // High resolution preview
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('window-overlay');
+        const container = document.getElementById('pdf-container');
+
+        // Conversion factor: 1mm = 72/25.4 points
+        const MM_TO_PT = 72 / 25.4;
+
+        async function renderPage(num) {
+            const page = await pdfDoc.getPage(num);
+            const viewport = page.getViewport({ scale: scale });
+            
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport
+            };
+
+            await page.render(renderContext).promise;
+            updateOverlay(viewport);
+            
+            document.getElementById('page-info').textContent = `Page ${num} of ${pdfDoc.numPages}`;
+            document.getElementById('viewer-wrapper').classList.remove('hidden');
+            document.getElementById('placeholder').classList.add('hidden');
+        }
+
+        function updateOverlay(viewport) {
+            const xMm = parseFloat(document.getElementById('win-x').value);
+            const yMm = parseFloat(document.getElementById('win-y').value);
+            const wMm = parseFloat(document.getElementById('win-w').value);
+            const hMm = parseFloat(document.getElementById('win-h').value);
+
+            // PDF.js uses scale to render. We must apply that scale to our mm->pt points
+            const xPx = xMm * MM_TO_PT * scale;
+            const yPx = yMm * MM_TO_PT * scale;
+            const wPx = wMm * MM_TO_PT * scale;
+            const hPx = hMm * MM_TO_PT * scale;
+
+            overlay.style.left = `${xPx}px`;
+            overlay.style.top = `${yPx}px`;
+            overlay.style.width = `${wPx}px`;
+            overlay.style.height = `${hPx}px`;
+            overlay.style.display = 'block';
+        }
+
+        document.getElementById('file-input').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                const reader = new FileReader();
+                reader.onload = async function() {
+                    const typedarray = new Uint8Array(this.result);
+                    pdfDoc = await pdfjsLib.getDocument(typedarray).promise;
+                    pageNum = 1;
+                    renderPage(pageNum);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        document.getElementById('apply-btn').addEventListener('click', () => {
+            if (pdfDoc) {
+                // Re-render to ensure viewport math is fresh
+                renderPage(pageNum);
+            }
+        });
+
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (pageNum <= 1) return;
+            pageNum--;
+            renderPage(pageNum);
+        });
+
+        document.getElementById('next-page').addEventListener('click', () => {
+            if (pageNum >= pdfDoc.numPages) return;
+            pageNum++;
+            renderPage(pageNum);
+        });
+
+        // Add keyboard support for nudging
+        window.addEventListener('keydown', (e) => {
+            if (!pdfDoc) return;
+            const step = e.shiftKey ? 5 : 1;
+            const inputs = {
+                'ArrowUp': 'win-y',
+                'ArrowDown': 'win-y',
+                'ArrowLeft': 'win-x',
+                'ArrowRight': 'win-x'
+            };
+
+            if (inputs[e.key]) {
+                e.preventDefault();
+                const el = document.getElementById(inputs[e.key]);
+                let val = parseFloat(el.value);
+                if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') val -= step;
+                else val += step;
+                el.value = val;
+                renderPage(pageNum);
+            }
+        });
+    </script>
+</body>
+</html>

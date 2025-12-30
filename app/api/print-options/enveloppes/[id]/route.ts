@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { invalidateAllPrintOptionsCache } from '@/lib/cache';
 
 /**
  * PUT /api/print-options/enveloppes/[id]
@@ -51,6 +52,9 @@ export async function PUT(
         ...(isActive !== undefined && { isActive }),
       },
     });
+
+    // Invalidate print options cache (envelopes are global, affect all tenants)
+    invalidateAllPrintOptionsCache();
 
     return NextResponse.json(updatedEnveloppe);
   } catch (error: unknown) {
@@ -111,6 +115,9 @@ export async function DELETE(
     await prisma.enveloppe.delete({
       where: { id: enveloppeId },
     });
+
+    // Invalidate print options cache (envelopes are global, affect all tenants)
+    invalidateAllPrintOptionsCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {
