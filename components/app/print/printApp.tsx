@@ -522,14 +522,14 @@ export default function PrintApp() {
             value: selectedSpeed.value,
             label: selectedSpeed.label,
           } : null,
-          rate: calculatedRate ? {
+          affranchissement: calculatedRate ? {
             id: calculatedRate.id,
             fullName: calculatedRate.fullName,
             name: calculatedRate.name,
             price: calculatedRate.price,
             speed: calculatedRate.speed,
           } : null,
-          totalCost: totalPostageCost,
+          estimatedTotalPrice: totalPostageCost,
         }
       }
     };
@@ -748,7 +748,7 @@ export default function PrintApp() {
       />
       
       <header className="bg-background border-b border-border py-6 mb-8">
-  <div className="container mx-auto px-4 max-w-5xl">
+  <div className="mx-auto px-6 lg:px-12">
     <h1 className="text-2xl font-bold text-foreground">Dépôt et configuration</h1>
     <p className="text-muted-foreground">
       Configurez les options d'impression et d'envoi de vos courriers
@@ -756,7 +756,7 @@ export default function PrintApp() {
   </div>
 </header>
 
-      <main className="container mx-auto px-4 max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="mx-auto px-6 lg:px-12 grid grid-cols-1 lg:grid-cols-12 gap-8">
       <div className="lg:col-span-7 space-y-6">
   <section>
     <SourceUploader />
@@ -1041,7 +1041,7 @@ export default function PrintApp() {
       </main>
 
       <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 shadow-lg z-50">
-  <div className="container mx-auto max-w-5xl flex flex-col md:flex-row items-center justify-between gap-3 md:gap-0">
+  <div className="mx-auto px-6 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-0">
 
     <div className="hidden md:flex flex-col">
       <p className="text-sm text-muted-foreground">
