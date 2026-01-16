@@ -151,6 +151,7 @@ model enveloppe {
   fullName  String   @db.VarChar(255)
   taille    String   @unique @db.VarChar(50)
   pdsMax    Int
+  poids     Int      @default(5) // Poids de l'enveloppe en grammes
   addrX     Float    @db.DoublePrecision
   addrY     Float    @db.DoublePrecision
   addrH     Float    @db.DoublePrecision

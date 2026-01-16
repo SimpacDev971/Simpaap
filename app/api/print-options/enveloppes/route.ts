@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/print-options/enveloppes
  * Creates a new envelope (global)
- * Body: { fullName, taille, pdsMax, addrX, addrY, addrH, addrL, isActive? }
+ * Body: { fullName, taille, pdsMax, poids, addrX, addrY, addrH, addrL, isActive? }
  * Requires SUPERADMIN
  */
 export async function POST(req: NextRequest) {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { fullName, taille, pdsMax, addrX, addrY, addrH, addrL, isActive = true } = body;
+    const { fullName, taille, pdsMax, poids, addrX, addrY, addrH, addrL, isActive = true } = body;
 
     if (!fullName || !taille || pdsMax === undefined) {
       return NextResponse.json(
@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
         fullName,
         taille,
         pdsMax: parseInt(pdsMax, 10),
+        poids: parseInt(poids, 10) || 5,
         addrX: parseFloat(addrX) || 0,
         addrY: parseFloat(addrY) || 0,
         addrH: parseFloat(addrH) || 0,

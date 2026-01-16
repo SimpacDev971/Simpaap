@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
     // Calculate monthly statistics
     const monthlyStats = Array.from({ length: 12 }, (_, i) => ({
       month: i + 1,
-      monthName: new Date(year, i, 1).toLocaleDateString('fr-FR', { month: 'short' }),
+      monthName: new Date(year, i, 1).toLocaleDateString('fr-FR', { month: 'short' }).replace(/^./, (c) => c.toUpperCase()),
       totalSendings: 0,
       totalRecipients: 0,
       totalPages: 0,

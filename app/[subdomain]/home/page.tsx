@@ -203,7 +203,7 @@ export default function DashboardPage() {
   // Chart configs
   const barChartConfig: ChartConfig = {
     totalSendings: {
-      label: 'Envois',
+      label: 'Dépôts',
       color: 'hsl(var(--chart-1))',
     },
     totalRecipients: {
@@ -250,7 +250,7 @@ export default function DashboardPage() {
   const { summary, monthlyStats, printOptionStats, recentItems, filters } = data;
 
   return (
-    <div className="min-h-screen bg-background p-6 space-y-6">
+    <div className="min-h-screen bg-background px-6 lg:px-12 py-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -399,7 +399,7 @@ export default function DashboardPage() {
                     <ChartTooltipContent
                       formatter={(value, name) => {
                         const labels: Record<string, string> = {
-                          totalSendings: 'Envois',
+                          //totalSendings: 'Dépôts',
                           totalRecipients: 'Destinataires',
                         };
                         return (
@@ -412,11 +412,11 @@ export default function DashboardPage() {
                   }
                 />
                 <ChartLegend content={<ChartLegendContent />} />
-                <Bar
+                {/*<Bar
                   dataKey="totalSendings"
                   fill="var(--color-totalSendings)"
                   radius={[4, 4, 0, 0]}
-                />
+                />*/}
                 <Bar
                   dataKey="totalRecipients"
                   fill="var(--color-totalRecipients)"

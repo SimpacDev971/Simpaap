@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
     const summary = {
       month,
       year,
-      monthName: new Date(year, month - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+      monthName: new Date(year, month - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^./, (c) => c.toUpperCase()),
       totalSendings: items.length,
       totalRecipients: items.reduce((sum, item) => sum + (item.totalRecipients || 0), 0),
       totalPages: items.reduce((sum, item) => sum + (item.totalPages || 0), 0),

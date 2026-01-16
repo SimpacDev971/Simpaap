@@ -50,6 +50,7 @@ interface Enveloppe {
   fullName: string;
   taille: string;
   pdsMax: number;
+  poids: number;
   addrX: number;
   addrY: number;
   addrH: number;
@@ -165,9 +166,12 @@ export default function PrintApp() {
     return pagesPerEnvelope;
   }, [pagesPerEnvelope, selectedSide]);
 
+  // Weight = sheets weight + envelope weight
   const weightPerEnvelope = useMemo(() => {
-    return sheetsPerEnvelope * WEIGHT_PER_SHEET_GRAMS;
-  }, [sheetsPerEnvelope]);
+    const sheetsWeight = sheetsPerEnvelope * WEIGHT_PER_SHEET_GRAMS;
+    const envelopeWeight = selectedEnveloppe?.poids || 0;
+    return sheetsWeight + envelopeWeight;
+  }, [sheetsPerEnvelope, selectedEnveloppe]);
 
   const totalPostageCost = useMemo(() => {
     if (!calculatedRate) return 0;
@@ -504,6 +508,7 @@ export default function PrintApp() {
             taille: selectedEnveloppe.taille,
             fullName: selectedEnveloppe.fullName,
             pdsMax: selectedEnveloppe.pdsMax,
+            poids: selectedEnveloppe.poids,
             addrX: selectedEnveloppe.addrX,
             addrY: selectedEnveloppe.addrY,
             addrH: selectedEnveloppe.addrH,

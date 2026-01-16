@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { invalidatePrintOptionsClientCache } from "@/contexts/PrintOptionsContext";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -18,6 +19,7 @@ interface Enveloppe {
   fullName: string;
   taille: string;
   pdsMax: number;
+  poids: number;
   addrX: number;
   addrY: number;
   addrH: number;
@@ -29,6 +31,7 @@ interface EnveloppeFormData {
   fullName: string;
   taille: string;
   pdsMax: string;
+  poids: string;
   addrX: string;
   addrY: string;
   addrH: string;
@@ -40,6 +43,7 @@ const defaultFormData: EnveloppeFormData = {
   fullName: "",
   taille: "",
   pdsMax: "",
+  poids: "5",
   addrX: "0",
   addrY: "0",
   addrH: "0",
@@ -78,6 +82,7 @@ export default function EnveloppesCrud() {
 
   const handleSuccess = () => {
     fetchEnveloppes();
+    invalidatePrintOptionsClientCache(); // Clear localStorage cache so printApp gets fresh data
     setShowCreate(false);
     setEditingEnveloppe(null);
     setDeletingEnveloppe(null);
@@ -114,6 +119,7 @@ export default function EnveloppesCrud() {
             <tr>
               <th className="text-left p-3 font-medium">Taille</th>
               <th className="text-left p-3 font-medium">Nom complet</th>
+              <th className="text-left p-3 font-medium">Poids env. (g)</th>
               <th className="text-left p-3 font-medium">Poids max (g)</th>
               <th className="text-left p-3 font-medium">Position adresse</th>
               <th className="text-left p-3 font-medium">Statut</th>
@@ -123,7 +129,7 @@ export default function EnveloppesCrud() {
           <tbody>
             {enveloppes.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-8 text-muted-foreground">
+                <td colSpan={7} className="text-center py-8 text-muted-foreground">
                   Aucune enveloppe configurée
                 </td>
               </tr>
@@ -132,6 +138,7 @@ export default function EnveloppesCrud() {
                 <tr key={enveloppe.id} className="border-t hover:bg-muted/50">
                   <td className="p-3 font-mono text-sm">{enveloppe.taille}</td>
                   <td className="p-3">{enveloppe.fullName}</td>
+                  <td className="p-3">{enveloppe.poids}g</td>
                   <td className="p-3">{enveloppe.pdsMax}g</td>
                   <td className="p-3 text-xs text-muted-foreground">
                     X:{enveloppe.addrX} Y:{enveloppe.addrY} H:{enveloppe.addrH} L:{enveloppe.addrL}
@@ -240,6 +247,7 @@ function EnveloppeForm({
           fullName: initialData.fullName,
           taille: initialData.taille,
           pdsMax: String(initialData.pdsMax),
+          poids: String(initialData.poids),
           addrX: String(initialData.addrX),
           addrY: String(initialData.addrY),
           addrH: String(initialData.addrH),
@@ -295,7 +303,7 @@ function EnveloppeForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="space-y-2">
           <Label htmlFor="taille">Code taille *</Label>
           <Input
@@ -309,7 +317,19 @@ function EnveloppeForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="pdsMax">Poids max (g) *</Label>
+          <Label htmlFor="poids">Poids enveloppe (g) *</Label>
+          <Input
+            id="poids"
+            type="number"
+            value={formData.poids}
+            onChange={(e) => handleChange("poids", e.target.value)}
+            placeholder="Ex: 5"
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="pdsMax">Poids max total (g) *</Label>
           <Input
             id="pdsMax"
             type="number"

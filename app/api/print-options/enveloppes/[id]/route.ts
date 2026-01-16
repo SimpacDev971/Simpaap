@@ -7,7 +7,7 @@ import { invalidateAllPrintOptionsCache } from '@/lib/cache';
 /**
  * PUT /api/print-options/enveloppes/[id]
  * Updates an envelope (global)
- * Body: { fullName?, taille?, pdsMax?, addrX?, addrY?, addrH?, addrL?, isActive? }
+ * Body: { fullName?, taille?, pdsMax?, poids?, addrX?, addrY?, addrH?, addrL?, isActive? }
  * Requires SUPERADMIN
  */
 export async function PUT(
@@ -29,7 +29,7 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const { fullName, taille, pdsMax, addrX, addrY, addrH, addrL, isActive } = body;
+    const { fullName, taille, pdsMax, poids, addrX, addrY, addrH, addrL, isActive } = body;
 
     const existingEnveloppe = await prisma.enveloppe.findUnique({
       where: { id: enveloppeId },
@@ -45,6 +45,7 @@ export async function PUT(
         ...(fullName !== undefined && { fullName }),
         ...(taille !== undefined && { taille }),
         ...(pdsMax !== undefined && { pdsMax: parseInt(pdsMax, 10) }),
+        ...(poids !== undefined && { poids: parseInt(poids, 10) }),
         ...(addrX !== undefined && { addrX: parseFloat(addrX) }),
         ...(addrY !== undefined && { addrY: parseFloat(addrY) }),
         ...(addrH !== undefined && { addrH: parseFloat(addrH) }),

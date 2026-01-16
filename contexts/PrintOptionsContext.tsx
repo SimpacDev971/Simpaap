@@ -24,6 +24,7 @@ export interface Enveloppe {
   fullName: string;
   taille: string;
   pdsMax: number;
+  poids: number;
   addrX: number;
   addrY: number;
   addrH: number;
