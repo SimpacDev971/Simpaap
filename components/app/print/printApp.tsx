@@ -798,7 +798,7 @@ export default function PrintApp() {
       ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label>Mode couleur</Label>
+          <Label>Couleur</Label>
           {colors.length > 0 ? (
             <Select
               value={selectedColor?.id?.toString() || ''}

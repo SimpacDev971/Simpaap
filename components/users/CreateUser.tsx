@@ -31,9 +31,8 @@ export default function CreateUser({
   subdomain,
   defaultRole = "MEMBER",
 }: CreateUserProps) {
-  const [formData, setFormData] = useState<Partial<UserWithTenant & { password: string; tenantSubdomain: string }>>({
+  const [formData, setFormData] = useState<Partial<UserWithTenant & { tenantSubdomain: string }>>({
     email: "",
-    password: "",
     name: "",
     role: defaultRole,
     tenantId: "",
@@ -89,7 +88,6 @@ export default function CreateUser({
     try {
       const payload: any = {
         email: formData.email,
-        password: formData.password,
         name: formData.name,
         role: formData.role,
       };
@@ -126,7 +124,6 @@ export default function CreateUser({
       // Reset form
       setFormData({
         email: "",
-        password: "",
         name: "",
         role: defaultRole,
         tenantId: "",
@@ -157,22 +154,9 @@ export default function CreateUser({
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
             placeholder="email@example.com"
           />
-        </div>
-
-        {/* Mot de passe */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Mot de passe *
-          </label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-            placeholder="••••••••"
-          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Un email d'invitation sera envoyé avec le lien de connexion et le mot de passe par défaut: <code className="bg-muted px-1 py-0.5 rounded">password</code>
+          </p>
         </div>
 
         {/* Nom */}

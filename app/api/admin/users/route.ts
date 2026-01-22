@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
     const { email, password, name, role, tenantSubdomain } = await req.json();
 
     // Champs obligatoires
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email et mot de passe requis' }, { status: 400 });
+    if (!email) {
+      return NextResponse.json({ error: 'Email requis' }, { status: 400 });
     }
 
     // Vérifier si l'email existe déjà
@@ -25,8 +25,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Utilisateur avec cet email existe déjà' }, { status: 409 });
     }
 
+    // Utiliser le mot de passe fourni ou le mot de passe par défaut
+    const defaultPassword = password || 'password';
     // Hachage du mot de passe
-    const hashedPassword = await hash(password, 10);
+    const hashedPassword = await hash(defaultPassword, 10);
 
     // Création utilisateur
     const userData: any = {
@@ -49,23 +51,43 @@ export async function POST(req: NextRequest) {
 
     try {
       const displayName = newUser.name?.length ? newUser.name : 'utilisateur';
+
+      // Construct tenant login URL
+      let loginUrl = '';
+      if (tenantSubdomain) {
+        const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+        const domain = baseUrl.replace(/^https?:\/\//, ''); // Remove protocol
+        loginUrl = `https://${tenantSubdomain}.${domain}/login`;
+      }
+
       await sendMailjetEmail({
         to: { email: newUser.email, name: newUser.name ?? undefined },
         subject: 'Bienvenue sur Simpaap',
         text: [
           `Bonjour ${displayName},`,
           '',
-          "Votre espace Simpaap est prêt. Vous pouvez maintenant vous connecter avec l'adresse email enregistrée.",
+          "Votre espace Simpaap est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :",
+          '',
+          `Email : ${newUser.email}`,
+          `Mot de passe : password`,
+          '',
+          loginUrl ? `Lien de connexion : ${loginUrl}` : '',
+          '',
+          'Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe dès votre première connexion.',
           '',
           'Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.',
           '',
           'À bientôt,',
-          'L’équipe Simpaap',
+          'L'équipe Simpaap',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
-<p>Votre accès à <strong>Simpaap</strong> est prêt. Vous pouvez maintenant vous connecter avec l'adresse email enregistrée.</p>
+<p>Votre accès à <strong>Simpaap</strong> est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :</p>
+<p><strong>Email :</strong> ${newUser.email}<br/>
+<strong>Mot de passe :</strong> <code>password</code></p>
+${loginUrl ? `<p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0;">Se connecter</a></p>` : ''}
+<p style="color: #666; font-size: 14px;">Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe dès votre première connexion.</p>
 <p>Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.</p>
-<p>À bientôt,<br/>L’équipe Simpaap</p>`,
+<p>À bientôt,<br/>L'équipe Simpaap</p>`,
         customId: 'user-created',
       });
     } catch (error) {
