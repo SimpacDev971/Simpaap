@@ -125,7 +125,7 @@ export const themes: Record<string, FullTheme> = {
     label: "Par défaut",
     description: "Thème classique avec des tons gris",
   }),
-  jardi: createTheme({
+  orange: createTheme({
     name: "jardi",
     label: "Jardi",
     description: "Thème dynamique avec des tons orange",
@@ -144,7 +144,7 @@ export const themes: Record<string, FullTheme> = {
       ring: "30 90% 40%",
     },
   }),
-  maina: createTheme({
+  nature: createTheme({
     name: "maina",
     label: "Maina",
     description: "Thème naturel vert",

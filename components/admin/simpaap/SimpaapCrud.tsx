@@ -19,10 +19,10 @@ interface SubTabConfig {
 
 const SUB_TABS: SubTabConfig[] = [
   { id: "colors", label: "Couleurs", component: "PrintOptionsCrud", apiEndpoint: "/api/print-options/colors", hasDescription: false },
-  { id: "sides", label: "Côtés", component: "PrintOptionsCrud", apiEndpoint: "/api/print-options/sides", hasDescription: false },
+  { id: "sides", label: "Impression", component: "PrintOptionsCrud", apiEndpoint: "/api/print-options/sides", hasDescription: false },
   { id: "enveloppes", label: "Enveloppes", component: "EnveloppesCrud" },
-  { id: "speeds", label: "Vitesses", component: "AffranchissementSpeedsCrud" },
-  { id: "affranchissements", label: "Affranchissements", component: "AffranchissementsCrud" },
+  { id: "speeds", label: "Affranchissements", component: "AffranchissementSpeedsCrud" },
+  { id: "affranchissements", label: "Tarifs", component: "AffranchissementsCrud" },
 ];
 
 export default function SimpaapCrud() {

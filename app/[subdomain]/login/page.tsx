@@ -39,7 +39,8 @@ export default function SubdomainLoginPage() {
         const session = await sessionRes.json();
 
         if (session?.user?.tenantSlug === subdomain) {
-          router.push(`/`);
+          // Use window.location to force a full page reload and session refresh
+          window.location.href = "/";
         } else {
           setCustomErr("Vous n'avez pas accès à ce tenant");
           await signIn("credentials", { redirect: false, email: "", password: "" });

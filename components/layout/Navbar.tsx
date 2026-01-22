@@ -29,7 +29,8 @@ export default function Navbar({ tenantSubdomain }: NavbarProps) {
   const { data: tenantApps, isLoading: appsLoading } = useTenantApplicationsContext();
   const handleLogout = async () => {
     await signOut({ redirect: false });
-    router.push("/login");
+    // Use window.location to force a full page reload after logout
+    window.location.href = "/login";
   };
 
   const handleApplicationClick = (url: string | null) => {

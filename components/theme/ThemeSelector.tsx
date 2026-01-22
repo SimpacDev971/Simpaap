@@ -28,7 +28,7 @@ export function ThemeSelector() {
 
   const currentThemeName = session.user.theme || "default";
 
-  const themesList = ["default", "jardi", "maina", "sunset", "ocean"]; // Ajouter ici tes thèmes disponibles
+  const themesList = ["default", "orange", "nature", "sunset", "ocean"]; // Ajouter ici tes thèmes disponibles
 
   const handleThemeChange = async (themeName: string) => {
     if (themeName === currentThemeName) {
