@@ -6,19 +6,14 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 /**
  * GET /api/print-options/affranchissements
  * Retrieves all affranchissements (global)
- * Optional: ?env_taille=xxx to filter by envelope size
  * Optional: ?activeOnly=true to get only active rates
  */
 export async function GET(req: NextRequest) {
-  const envTaille = req.nextUrl.searchParams.get('env_taille');
   const activeOnly = req.nextUrl.searchParams.get('activeOnly') === 'true';
 
   try {
-    const whereClause: { env_taille?: string; isActive?: boolean } = {};
+    const whereClause: { isActive?: boolean } = {};
 
-    if (envTaille) {
-      whereClause.env_taille = envTaille;
-    }
     if (activeOnly) {
       whereClause.isActive = true;
     }
@@ -26,15 +21,11 @@ export async function GET(req: NextRequest) {
     const affranchissements = await prisma.affranchissement.findMany({
       where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
       include: {
-        enveloppe: {
-          select: { fullName: true, taille: true },
-        },
         speed: {
           select: { id: true, value: true, label: true },
         },
       },
       orderBy: [
-        { env_taille: 'asc' },
         { pdsMin: 'asc' },
       ],
     });
@@ -52,7 +43,7 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/print-options/affranchissements
  * Creates a new affranchissement (global)
- * Body: { fullName, name, env_taille, pdsMin, pdsMax, price, isActive? }
+ * Body: { fullName, name, speedId?, pdsMin, pdsMax, price, isActive? }
  * Requires SUPERADMIN
  */
 export async function POST(req: NextRequest) {
@@ -64,23 +55,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { fullName, name, env_taille, speedId, pdsMin, pdsMax, price, isActive = true } = body;
+    const { fullName, name, speedId, pdsMin, pdsMax, price, isActive = true } = body;
 
-    if (!fullName || !name || !env_taille || pdsMin === undefined || pdsMax === undefined || price === undefined) {
+    if (!fullName || !name || pdsMin === undefined || pdsMax === undefined || price === undefined) {
       return NextResponse.json(
-        { error: 'fullName, name, env_taille, pdsMin, pdsMax and price are required' },
-        { status: 400 }
-      );
-    }
-
-    // Verify the envelope exists
-    const enveloppe = await prisma.enveloppe.findUnique({
-      where: { taille: env_taille },
-    });
-
-    if (!enveloppe) {
-      return NextResponse.json(
-        { error: `Envelope with taille "${env_taille}" not found` },
+        { error: 'fullName, name, pdsMin, pdsMax and price are required' },
         { status: 400 }
       );
     }
@@ -102,7 +81,6 @@ export async function POST(req: NextRequest) {
       data: {
         fullName,
         name,
-        env_taille,
         speedId: speedId ? parseInt(speedId, 10) : null,
         pdsMin: parseInt(pdsMin, 10),
         pdsMax: parseInt(pdsMax, 10),
@@ -110,9 +88,6 @@ export async function POST(req: NextRequest) {
         isActive,
       },
       include: {
-        enveloppe: {
-          select: { fullName: true, taille: true },
-        },
         speed: {
           select: { id: true, value: true, label: true },
         },

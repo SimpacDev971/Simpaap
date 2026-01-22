@@ -160,7 +160,6 @@ model enveloppe {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  affranchissements  affranchissement[]
   tenant_enveloppe   tenant_enveloppe[]
 }
 
@@ -178,22 +177,20 @@ model affranchissement_speed {
 }
 
 model affranchissement {
-  id         Int      @id @default(autoincrement())
-  fullName   String   @db.VarChar(255)
-  name       String   @db.VarChar(50)
-  env_taille String   @db.VarChar(50)
-  speedId    Int?
-  pdsMin     Int
-  pdsMax     Int
-  price      Decimal  @db.Decimal(10, 4)
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  fullName  String   @db.VarChar(255)
+  name      String   @db.VarChar(50)
+  speedId   Int?
+  pdsMin    Int
+  pdsMax    Int
+  price     Decimal  @db.Decimal(10, 4)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  enveloppe enveloppe               @relation(fields: [env_taille], references: [taille])
-  speed     affranchissement_speed? @relation(fields: [speedId], references: [id])
+  speed affranchissement_speed? @relation(fields: [speedId], references: [id])
 
-  @@index([env_taille, pdsMin, pdsMax])
+  @@index([pdsMin, pdsMax])
   @@index([speedId])
 }
 

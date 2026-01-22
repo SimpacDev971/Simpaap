@@ -6,7 +6,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 /**
  * PUT /api/print-options/affranchissements/[id]
  * Updates an affranchissement (global)
- * Body: { fullName?, name?, env_taille?, pdsMin?, pdsMax?, price?, isActive? }
+ * Body: { fullName?, name?, speedId?, pdsMin?, pdsMax?, price?, isActive? }
  * Requires SUPERADMIN
  */
 export async function PUT(
@@ -28,7 +28,7 @@ export async function PUT(
 
   try {
     const body = await req.json();
-    const { fullName, name, env_taille, speedId, pdsMin, pdsMax, price, isActive } = body;
+    const { fullName, name, speedId, pdsMin, pdsMax, price, isActive } = body;
 
     const existingAffranchissement = await prisma.affranchissement.findUnique({
       where: { id: affranchissementId },
@@ -36,19 +36,6 @@ export async function PUT(
 
     if (!existingAffranchissement) {
       return NextResponse.json({ error: 'Affranchissement not found' }, { status: 404 });
-    }
-
-    // If env_taille is being changed, verify the new envelope exists
-    if (env_taille && env_taille !== existingAffranchissement.env_taille) {
-      const enveloppe = await prisma.enveloppe.findUnique({
-        where: { taille: env_taille },
-      });
-      if (!enveloppe) {
-        return NextResponse.json(
-          { error: `Envelope with taille "${env_taille}" not found` },
-          { status: 400 }
-        );
-      }
     }
 
     // If speedId is being changed and provided, verify the new speed exists
@@ -69,7 +56,6 @@ export async function PUT(
       data: {
         ...(fullName !== undefined && { fullName }),
         ...(name !== undefined && { name }),
-        ...(env_taille !== undefined && { env_taille }),
         ...(speedId !== undefined && { speedId: speedId ? parseInt(speedId, 10) : null }),
         ...(pdsMin !== undefined && { pdsMin: parseInt(pdsMin, 10) }),
         ...(pdsMax !== undefined && { pdsMax: parseInt(pdsMax, 10) }),
@@ -77,9 +63,6 @@ export async function PUT(
         ...(isActive !== undefined && { isActive }),
       },
       include: {
-        enveloppe: {
-          select: { fullName: true, taille: true },
-        },
         speed: {
           select: { id: true, value: true, label: true },
         },

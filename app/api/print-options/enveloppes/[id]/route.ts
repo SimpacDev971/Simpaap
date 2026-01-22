@@ -98,19 +98,10 @@ export async function DELETE(
   try {
     const existingEnveloppe = await prisma.enveloppe.findUnique({
       where: { id: enveloppeId },
-      include: { affranchissements: { select: { id: true } } },
     });
 
     if (!existingEnveloppe) {
       return NextResponse.json({ error: 'Envelope not found' }, { status: 404 });
-    }
-
-    // Check if there are affranchissements linked to this envelope
-    if (existingEnveloppe.affranchissements.length > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete envelope with linked affranchissements. Delete them first.' },
-        { status: 400 }
-      );
     }
 
     await prisma.enveloppe.delete({
