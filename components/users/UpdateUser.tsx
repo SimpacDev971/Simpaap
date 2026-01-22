@@ -206,7 +206,7 @@ export default function UpdateUser({
               required
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="">Sélectionner un tenant</option>
+              <option value="">Sélectionner un client</option>
               {tenants.map((tenant) => (
                 <option key={tenant.id} value={tenant.subdomain}>
                   {tenant.name} ({tenant.subdomain})

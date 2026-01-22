@@ -136,6 +136,11 @@ export async function PUT(req: NextRequest) {
     const oldUser = await prisma.user.findUnique({ where: { id: data.id } });
     if (!oldUser || oldUser.tenantId !== tenant.id)
       return NextResponse.json({ error: 'User not in tenant' }, { status: 400 });
+
+    // Empêcher un SUPERADMIN de modifier un autre SUPERADMIN
+    if (oldUser.role === 'SUPERADMIN' && oldUser.id !== session?.user?.id) {
+      return NextResponse.json({ error: 'Vous ne pouvez pas modifier un autre SUPERADMIN' }, { status: 403 });
+    }
     
     const { hash } = await import('bcryptjs');
     const updateData: any = {

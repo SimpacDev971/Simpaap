@@ -63,12 +63,12 @@ export default function CreateUser({
       const fetchTenantName = async () => {
         try {
           const res = await fetch(`/api/tenant?subdomain=${subdomain}`);
-          if (!res.ok) throw new Error("Tenant introuvable");
+          if (!res.ok) throw new Error("Client introuvable");
           const data = await res.json();
           setTenantName(data.name);
           setFormData((prev) => ({ ...prev, tenantId: data.id, tenantSubdomain: subdomain }));
         } catch (err: any) {
-          setError(err.message || "Impossible de récupérer le tenant");
+          setError(err.message || "Impossible de récupérer le client");
         }
       };
       fetchTenantName();
@@ -195,7 +195,7 @@ export default function CreateUser({
         {isAdminSubdomain && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tenant *
+              Client *
             </label>
             <select
               name="tenantSubdomain"
@@ -204,7 +204,7 @@ export default function CreateUser({
               required
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
-              <option value="">Sélectionner un tenant</option>
+              <option value="">Sélectionner un Client</option>
               {tenants.map((tenant) => (
                 <option key={tenant.id} value={tenant.subdomain}>
                   {tenant.name} ({tenant.subdomain})

@@ -16,6 +16,7 @@ import {
 import { useSession } from "next-auth/react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { pdfjs } from "react-pdf";
+import { Reorder } from "framer-motion";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
@@ -130,7 +131,6 @@ export default function PrintApp() {
   const sourceFileInputRef = useRef<HTMLInputElement>(null);
   const annexeFileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
-  const dragItem = useRef<number | null>(null); // Index de l'élément que l'on glisse
 
   // Calcul du nombre total de pages
   const totalPages = useMemo(() => {
@@ -386,42 +386,9 @@ export default function PrintApp() {
     });
   };
 
-  // 3. Logique de Drag-and-Drop pour les Annexes
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, index: number) => {
-    dragItem.current = index;
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/html", e.currentTarget.outerHTML);
-    // Masquer l'élément en cours de glissement
-    setTimeout(() => {
-        if (e.currentTarget.style) e.currentTarget.style.opacity = '0.4';
-    }, 0);
-  };
-  
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault(); // Nécessaire pour permettre le drop
-    e.dataTransfer.dropEffect = "move";
-  };
-  
-  const handleDropAnnexe = (e: React.DragEvent<HTMLDivElement>, dropIndex: number) => {
-    e.preventDefault();
-    if (e.currentTarget.style) e.currentTarget.style.opacity = '1'; // Rétablir l'opacité
-    
-    const draggedIndex = dragItem.current;
-    if (draggedIndex === null || draggedIndex === dropIndex) return;
-
-    setAnnexes(prev => {
-      const newAnnexes = [...prev];
-      const draggedItem = newAnnexes[draggedIndex];
-      
-      // Retirer l'élément de sa position initiale
-      newAnnexes.splice(draggedIndex, 1);
-      
-      // Insérer l'élément à la nouvelle position
-      newAnnexes.splice(dropIndex, 0, draggedItem);
-      
-      dragItem.current = null;
-      return newAnnexes;
-    });
+  // 3. Logique de Reorder pour les Annexes (avec framer-motion)
+  const handleReorderAnnexes = (newOrder: PDFFile[]) => {
+    setAnnexes(newOrder);
   };
 
   // 4. Nettoyage global
@@ -656,36 +623,60 @@ export default function PrintApp() {
         <ListOrdered size={20} className="text-blue-600" />
         2. Annexes ({annexes.length} fichier{annexes.length > 1 ? "s" : ""})
       </h2>
-  
+
       <div className="space-y-2">
-        {annexes.map((pdf, index) => (
-          <Card
-            key={pdf.id}
-            className="p-3 flex items-center justify-between transition-all cursor-pointer hover:text-orange-700 p-2 hover:bg-orange-50 rounded transition-colors"
-            draggable={true}
-            onDragStart={(e) => handleDragStart(e, index)}
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDropAnnexe(e, index)}
-            onDragEnd={(e) => { e.currentTarget.style.opacity = "1"; dragItem.current = null; }}
-          >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-sm font-bold w-5 text-center">{index + 1}</span>
-              <FileText size={20} className="text-orange-600" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{pdf.file.name}</p>
-                <p className="text-xs">
-                  {(pdf.file.size / 1024 / 1024).toFixed(2)} MB
-                  {pdf.numPages > 0 && ` • ${pdf.numPages} page${pdf.numPages > 1 ? "s" : ""}`}
-                </p>
-              </div>
-            </div>
-            <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); handleRemoveAnnexe(pdf.id); }}>
-              <Trash2 size={16} />
-            </Button>
-          </Card>
-        ))}
-  
-        <Button size="default" variant="outline" className="w-full flex items-center justify-center gap-2" onClick={() => annexeFileInputRef.current?.click()}>
+        <Reorder.Group
+          axis="y"
+          values={annexes}
+          onReorder={handleReorderAnnexes}
+          className="space-y-2"
+        >
+          {annexes.map((pdf, index) => (
+            <Reorder.Item
+              key={pdf.id}
+              value={pdf}
+              className="list-none"
+              whileDrag={{
+                scale: 1.02,
+                boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                cursor: "grabbing"
+              }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            >
+              <Card className="p-3 flex items-center justify-between cursor-grab active:cursor-grabbing hover:bg-orange-50 dark:hover:bg-orange-950/20 transition-colors">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-sm font-bold w-5 text-center">{index + 1}</span>
+                  <FileText size={20} className="text-orange-600" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{pdf.file.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(pdf.file.size / 1024 / 1024).toFixed(2)} MB
+                      {pdf.numPages > 0 && ` • ${pdf.numPages} page${pdf.numPages > 1 ? "s" : ""}`}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveAnnexe(pdf.id);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()} // Prevent drag when clicking delete
+                >
+                  <Trash2 size={16} />
+                </Button>
+              </Card>
+            </Reorder.Item>
+          ))}
+        </Reorder.Group>
+
+        <Button
+          size="default"
+          variant="outline"
+          className="w-full flex items-center justify-center gap-2"
+          onClick={() => annexeFileInputRef.current?.click()}
+        >
           <Plus size={20} />
           Ajouter une annexe
         </Button>

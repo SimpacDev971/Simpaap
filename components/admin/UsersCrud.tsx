@@ -144,14 +144,17 @@ export default function UsersCrud({ tenantSubdomain }: UsersCrudProps) {
                 </td>
                 {session?.user.role === "SUPERADMIN" && <td className="p-3">{user.tenant.name}</td>}
                 <td className="text-right p-3">
-                  <Button
-                    onClick={() => setEditingUser(user)}
-                    variant="outline"
-                    size="sm"
-                    className="mr-2"
-                  >
-                    Modifier
-                  </Button>
+                  {/* Disable edit for other SUPERADMINs (can only edit yourself if you're SUPERADMIN) */}
+                  {!(user.role === "SUPERADMIN" && user.id !== session?.user?.id) && (
+                    <Button
+                      onClick={() => setEditingUser(user)}
+                      variant="outline"
+                      size="sm"
+                      className="mr-2"
+                    >
+                      Modifier
+                    </Button>
+                  )}
                   {user.role !== "SUPERADMIN" && (
                     <Button
                       onClick={() => setDeletingUser(user)}

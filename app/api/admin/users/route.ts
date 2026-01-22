@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
           'Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.',
           '',
           'À bientôt,',
-          'L'équipe Simpaap',
+          'SIMPAC',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
 <p>Votre accès à <strong>Simpaap</strong> est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :</p>
@@ -122,6 +122,11 @@ export async function PUT(req: NextRequest) {
     const existingUser = await prisma.user.findUnique({ where: { id } });
     if (!existingUser) {
       return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 });
+    }
+
+    // Empêcher un SUPERADMIN de modifier un autre SUPERADMIN
+    if (existingUser.role === 'SUPERADMIN' && existingUser.id !== session.user.id) {
+      return NextResponse.json({ error: 'Vous ne pouvez pas modifier un autre SUPERADMIN' }, { status: 403 });
     }
 
     // Vérifier si l'email est changé et s'il existe déjà
