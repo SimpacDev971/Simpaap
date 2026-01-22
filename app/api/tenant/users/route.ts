@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
           'Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.',
           '',
           'À bientôt,',
-          'L'équipe Simpaap',
+          'SIMPAC',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
 <p>Votre accès à <strong>Simpaap</strong> est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :</p>
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
 <p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0;">Se connecter</a></p>
 <p style="color: #666; font-size: 14px;">Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe dès votre première connexion.</p>
 <p>Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.</p>
-<p>À bientôt,<br/>L'équipe Simpaap</p>`,
+<p>À bientôt,<br/>SIMPAC</p>`,
         customId: 'user-created',
       });
     } catch (error) {
