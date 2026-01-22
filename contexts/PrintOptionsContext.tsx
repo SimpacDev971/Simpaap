@@ -58,8 +58,8 @@ interface PrintOptionsContextType {
 const PrintOptionsContext = createContext<PrintOptionsContextType | null>(null);
 
 // --- Cache Configuration ---
-// Cache TTL: 12 hours (reload 2 times a day)
-const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
+// Cache TTL: 2 hours
+const CACHE_TTL = 2 * 60 * 60 * 1000; // 12 hours in milliseconds
 const CACHE_KEY = 'print_options_cache';
 
 interface CacheEntry {

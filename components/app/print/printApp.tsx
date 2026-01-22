@@ -912,7 +912,7 @@ export default function PrintApp() {
     <Card className="p-6 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <Label>Vitesse d&apos;envoi</Label>
+          <Label>Affranchissement</Label>
           {speeds.length > 0 ? (
             <Select
               value={selectedSpeed?.id?.toString() || ''}
