@@ -3,18 +3,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * POST /api/print-options/calculate-postage
- * Calculates postage rate for a given weight, envelope size, and optionally speed
- * Body: { env_taille: string, weightGrams: number, speedId?: number }
+ * Calculates postage rate for a given weight and optionally speed
+ * Body: { weightGrams: number, speedId?: number }
  * Returns: { rate: { id, fullName, name, price, speed } | null }
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { env_taille, weightGrams, speedId } = body;
+    const { weightGrams, speedId } = body;
 
-    if (!env_taille || weightGrams === undefined) {
+    if (weightGrams === undefined) {
       return NextResponse.json(
-        { error: 'env_taille and weightGrams are required' },
+        { error: 'weightGrams is required' },
         { status: 400 }
       );
     }
@@ -28,15 +28,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build where clause
+    // Build where clause - only weight range and optionally speed
     const whereClause: {
-      env_taille: string;
       pdsMin: { lte: number };
       pdsMax: { gte: number };
       isActive: boolean;
       speedId?: number;
     } = {
-      env_taille,
       pdsMin: { lte: weight },
       pdsMax: { gte: weight },
       isActive: true,
@@ -80,7 +78,7 @@ export async function POST(req: NextRequest) {
         speedId: rate.speedId,
         speed: rate.speed,
       } : null,
-      input: { env_taille, weightGrams: weight, speedId: speedId || null },
+      input: { weightGrams: weight, speedId: speedId || null },
     });
   } catch (error) {
     console.error('Error calculating postage:', error);

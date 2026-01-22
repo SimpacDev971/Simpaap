@@ -1,8 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export interface PrintOptionData {
   id?: number;
@@ -21,6 +24,17 @@ interface PrintOptionFormProps {
   onCancel?: () => void;
 }
 
+// Generate a unique code from label
+function generateCode(label: string): string {
+  return label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/[^a-z0-9\s]/g, "") // Remove special chars
+    .replace(/\s+/g, "_") // Replace spaces with underscore
+    .substring(0, 50); // Limit length
+}
+
 export default function PrintOptionForm({
   initialData,
   apiEndpoint,
@@ -30,22 +44,16 @@ export default function PrintOptionForm({
 }: PrintOptionFormProps) {
   const isEditing = !!initialData?.id;
 
-  const [formData, setFormData] = useState<PrintOptionData>({
-    value: initialData?.value || "",
+  const [formData, setFormData] = useState({
     label: initialData?.label || "",
     description: initialData?.description || "",
     isActive: initialData?.isActive ?? true,
-    sortOrder: initialData?.sortOrder ?? 0,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
-    }));
+  const handleChange = (field: string, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,8 +61,8 @@ export default function PrintOptionForm({
     setLoading(true);
     setError("");
 
-    if (!formData.value || !formData.label) {
-      setError("La valeur et le libellé sont requis");
+    if (!formData.label.trim()) {
+      setError("Le libellé est requis");
       setLoading(false);
       return;
     }
@@ -63,12 +71,27 @@ export default function PrintOptionForm({
       const url = isEditing ? `${apiEndpoint}/${initialData.id}` : apiEndpoint;
       const method = isEditing ? "PUT" : "POST";
 
+      // Auto-generate value from label (only for new items)
+      const value = isEditing ? initialData.value : generateCode(formData.label);
+
+      // Auto-generate sortOrder (get next available order)
+      let sortOrder = initialData?.sortOrder ?? 0;
+      if (!isEditing) {
+        // Fetch existing items to determine next sortOrder
+        const listRes = await fetch(apiEndpoint);
+        if (listRes.ok) {
+          const items = await listRes.json();
+          sortOrder = items.length > 0 ? Math.max(...items.map((i: PrintOptionData) => i.sortOrder)) + 1 : 0;
+        }
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          sortOrder: parseInt(String(formData.sortOrder), 10),
+          value,
+          sortOrder,
         }),
       });
 
@@ -89,91 +112,53 @@ export default function PrintOptionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-1">
-          Valeur technique *
-        </label>
-        <input
-          type="text"
-          name="value"
-          value={formData.value}
-          onChange={handleChange}
-          required
-          pattern="[a-zA-Z0-9_-]+"
-          className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
-          placeholder="ex: noir_blanc"
-          disabled={isEditing}
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Identifiant unique (lettres, chiffres, tirets, underscores)
-        </p>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-foreground mb-1">
-          Libellé *
-        </label>
-        <input
-          type="text"
-          name="label"
-          value={formData.label}
-          onChange={handleChange}
-          required
-          className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
-          placeholder="ex: Noir et Blanc"
-        />
-      </div>
-
-      {hasDescription && (
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">
-            Description
-          </label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={2}
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
-            placeholder="Description optionnelle"
-          />
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">
-            Ordre d'affichage
-          </label>
-          <input
-            type="number"
-            name="sortOrder"
-            value={formData.sortOrder}
-            onChange={handleChange}
-            min={0}
-            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary bg-background text-foreground"
-          />
-        </div>
-
-        <div className="flex items-center pt-6">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              name="isActive"
-              checked={formData.isActive}
-              onChange={handleChange}
-              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-            />
-            <span className="text-sm font-medium">Actif</span>
-          </label>
-        </div>
-      </div>
-
       {error && (
         <div className="bg-destructive/20 border border-destructive text-destructive px-4 py-3 rounded text-sm">
           {error}
         </div>
       )}
+
+      <div className="space-y-2">
+        <Label htmlFor="label">Libellé *</Label>
+        <Input
+          id="label"
+          value={formData.label}
+          onChange={(e) => handleChange("label", e.target.value)}
+          placeholder="Ex: Noir et Blanc"
+          required
+        />
+        <p className="text-xs text-muted-foreground">
+          Le nom affiché pour cette option
+        </p>
+      </div>
+
+      {hasDescription && (
+        <div className="space-y-2">
+          <Label htmlFor="description">Description</Label>
+          <textarea
+            id="description"
+            value={formData.description}
+            onChange={(e) => handleChange("description", e.target.value)}
+            rows={2}
+            className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground"
+            placeholder="Description optionnelle"
+          />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between p-4 border rounded-lg">
+        <div className="space-y-0.5">
+          <Label htmlFor="isActive">Statut</Label>
+          <p className="text-xs text-muted-foreground">
+            Rendre cette option disponible
+          </p>
+        </div>
+        <Switch
+          id="isActive"
+          checked={formData.isActive}
+          onCheckedChange={(checked) => handleChange("isActive", checked)}
+        />
+      </div>
 
       <div className="flex gap-2 pt-2">
         <Button type="submit" disabled={loading} className="flex-1">

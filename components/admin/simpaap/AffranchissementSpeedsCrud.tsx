@@ -22,18 +22,25 @@ interface Speed {
 }
 
 interface SpeedFormData {
-  value: string;
   label: string;
   isActive: boolean;
-  sortOrder: string;
 }
 
 const defaultFormData: SpeedFormData = {
-  value: "",
   label: "",
   isActive: true,
-  sortOrder: "0",
 };
+
+// Generate a unique code from label
+function generateCode(label: string): string {
+  return label
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/[^a-z0-9\s]/g, "") // Remove special chars
+    .replace(/\s+/g, "_") // Replace spaces with underscore
+    .substring(0, 50); // Limit length
+}
 
 export default function AffranchissementSpeedsCrud() {
   const [speeds, setSpeeds] = useState<Speed[]>([]);
@@ -105,8 +112,6 @@ export default function AffranchissementSpeedsCrud() {
         <table className="w-full">
           <thead className="bg-muted">
             <tr>
-              <th className="text-left p-3 font-medium">Ordre</th>
-              <th className="text-left p-3 font-medium">Code</th>
               <th className="text-left p-3 font-medium">Libellé</th>
               <th className="text-left p-3 font-medium">Statut</th>
               <th className="text-right p-3 font-medium">Actions</th>
@@ -115,22 +120,20 @@ export default function AffranchissementSpeedsCrud() {
           <tbody>
             {speeds.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center py-8 text-muted-foreground">
+                <td colSpan={3} className="text-center py-8 text-muted-foreground">
                   Aucune vitesse configurée
                 </td>
               </tr>
             ) : (
               speeds.map((speed) => (
-                <tr key={speed.id} className="border-t hover:bg-muted/50">
-                  <td className="p-3 text-sm">{speed.sortOrder}</td>
-                  <td className="p-3 font-mono text-sm">{speed.value}</td>
-                  <td className="p-3">{speed.label}</td>
+                <tr key={speed.id} className="border-t hover:bg-muted/50 transition-colors">
+                  <td className="p-3 font-medium">{speed.label}</td>
                   <td className="p-3">
                     <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         speed.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
                       }`}
                     >
                       {speed.isActive ? "Actif" : "Inactif"}
@@ -141,6 +144,7 @@ export default function AffranchissementSpeedsCrud() {
                       variant="outline"
                       size="icon"
                       onClick={() => setEditingSpeed(speed)}
+                      title="Modifier"
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -148,6 +152,7 @@ export default function AffranchissementSpeedsCrud() {
                       variant="destructive"
                       size="icon"
                       onClick={() => setDeletingSpeed(speed)}
+                      title="Supprimer"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -226,10 +231,8 @@ function SpeedForm({
   const [formData, setFormData] = useState<SpeedFormData>(
     initialData
       ? {
-          value: initialData.value,
           label: initialData.label,
           isActive: initialData.isActive,
-          sortOrder: String(initialData.sortOrder),
         }
       : defaultFormData
   );
@@ -247,15 +250,39 @@ function SpeedForm({
     setLoading(true);
     setError("");
 
+    if (!formData.label.trim()) {
+      setError("Le libellé est requis");
+      setLoading(false);
+      return;
+    }
+
     try {
       const url = isEditing
         ? `/api/print-options/speeds/${initialData.id}`
         : "/api/print-options/speeds";
 
+      // Auto-generate value from label (only for new items)
+      const value = isEditing ? initialData.value : generateCode(formData.label);
+
+      // Auto-generate sortOrder (get next available order)
+      let sortOrder = initialData?.sortOrder ?? 0;
+      if (!isEditing) {
+        // Fetch existing items to determine next sortOrder
+        const listRes = await fetch("/api/print-options/speeds");
+        if (listRes.ok) {
+          const items = await listRes.json();
+          sortOrder = items.length > 0 ? Math.max(...items.map((i: Speed) => i.sortOrder)) + 1 : 0;
+        }
+      }
+
       const res = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          value,
+          sortOrder,
+        }),
       });
 
       if (!res.ok) {
@@ -281,20 +308,6 @@ function SpeedForm({
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="value">Code *</Label>
-        <Input
-          id="value"
-          value={formData.value}
-          onChange={(e) => handleChange("value", e.target.value)}
-          placeholder="Ex: ecopli, lettre_verte, prioritaire"
-          required
-        />
-        <p className="text-xs text-muted-foreground">
-          Identifiant unique (sans espaces, en minuscules)
-        </p>
-      </div>
-
-      <div className="space-y-2">
         <Label htmlFor="label">Libellé *</Label>
         <Input
           id="label"
@@ -303,35 +316,40 @@ function SpeedForm({
           placeholder="Ex: Ecopli, Lettre Verte, Lettre Prioritaire"
           required
         />
+        <p className="text-xs text-muted-foreground">
+          Le nom affiché pour cette vitesse d'envoi
+        </p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="sortOrder">Ordre d'affichage</Label>
-        <Input
-          id="sortOrder"
-          type="number"
-          value={formData.sortOrder}
-          onChange={(e) => handleChange("sortOrder", e.target.value)}
-          placeholder="0"
-        />
-      </div>
-
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center justify-between p-4 border rounded-lg">
+        <div className="space-y-0.5">
+          <Label htmlFor="isActive">Statut</Label>
+          <p className="text-xs text-muted-foreground">
+            Rendre cette vitesse disponible
+          </p>
+        </div>
         <Switch
           id="isActive"
           checked={formData.isActive}
           onCheckedChange={(checked) => handleChange("isActive", checked)}
         />
-        <Label htmlFor="isActive">Actif</Label>
       </div>
 
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Annuler
+      <div className="flex gap-2 pt-2">
+        <Button type="submit" disabled={loading} className="flex-1">
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Enregistrement...
+            </>
+          ) : isEditing ? (
+            "Mettre à jour"
+          ) : (
+            "Créer"
+          )}
         </Button>
-        <Button type="submit" disabled={loading}>
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEditing ? "Modifier" : "Créer"}
+        <Button type="button" onClick={onCancel} variant="outline">
+          Annuler
         </Button>
       </div>
     </form>

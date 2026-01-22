@@ -89,8 +89,6 @@ export default function PrintOptionsCrud({
         <table className="w-full">
           <thead className="bg-muted">
             <tr>
-              <th className="text-left p-3 font-medium">Ordre</th>
-              <th className="text-left p-3 font-medium">Valeur</th>
               <th className="text-left p-3 font-medium">Libellé</th>
               {hasDescription && (
                 <th className="text-left p-3 font-medium">Description</th>
@@ -103,7 +101,7 @@ export default function PrintOptionsCrud({
             {options.length === 0 ? (
               <tr>
                 <td
-                  colSpan={hasDescription ? 6 : 5}
+                  colSpan={hasDescription ? 4 : 3}
                   className="text-center py-8 text-muted-foreground"
                 >
                   Aucune option configurée
@@ -111,10 +109,8 @@ export default function PrintOptionsCrud({
               </tr>
             ) : (
               options.map((option) => (
-                <tr key={option.id} className="border-t hover:bg-muted/50">
-                  <td className="p-3">{option.sortOrder}</td>
-                  <td className="p-3 font-mono text-sm">{option.value}</td>
-                  <td className="p-3">{option.label}</td>
+                <tr key={option.id} className="border-t hover:bg-muted/50 transition-colors">
+                  <td className="p-3 font-medium">{option.label}</td>
                   {hasDescription && (
                     <td className="p-3 text-sm text-muted-foreground">
                       {option.description || "-"}
@@ -122,10 +118,10 @@ export default function PrintOptionsCrud({
                   )}
                   <td className="p-3">
                     <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         option.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
                       }`}
                     >
                       {option.isActive ? "Actif" : "Inactif"}
@@ -136,6 +132,7 @@ export default function PrintOptionsCrud({
                       variant="outline"
                       size="icon"
                       onClick={() => setEditingOption(option)}
+                      title="Modifier"
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -143,6 +140,7 @@ export default function PrintOptionsCrud({
                       variant="destructive"
                       size="icon"
                       onClick={() => setDeletingOption(option)}
+                      title="Supprimer"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

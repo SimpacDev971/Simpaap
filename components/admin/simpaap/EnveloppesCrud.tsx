@@ -29,7 +29,6 @@ interface Enveloppe {
 
 interface EnveloppeFormData {
   fullName: string;
-  taille: string;
   pdsMax: string;
   poids: string;
   addrX: string;
@@ -41,7 +40,6 @@ interface EnveloppeFormData {
 
 const defaultFormData: EnveloppeFormData = {
   fullName: "",
-  taille: "",
   pdsMax: "",
   poids: "5",
   addrX: "0",
@@ -50,6 +48,17 @@ const defaultFormData: EnveloppeFormData = {
   addrL: "0",
   isActive: true,
 };
+
+// Generate a unique code from fullName
+function generateCode(fullName: string): string {
+  return fullName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/[^a-z0-9\s]/g, "") // Remove special chars
+    .replace(/\s+/g, "_") // Replace spaces with underscore
+    .substring(0, 50); // Limit length
+}
 
 export default function EnveloppesCrud() {
   const [enveloppes, setEnveloppes] = useState<Enveloppe[]>([]);
@@ -117,7 +126,6 @@ export default function EnveloppesCrud() {
         <table className="w-full">
           <thead className="bg-muted">
             <tr>
-              <th className="text-left p-3 font-medium">Taille</th>
               <th className="text-left p-3 font-medium">Nom complet</th>
               <th className="text-left p-3 font-medium">Poids env. (g)</th>
               <th className="text-left p-3 font-medium">Poids max (g)</th>
@@ -129,15 +137,14 @@ export default function EnveloppesCrud() {
           <tbody>
             {enveloppes.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-8 text-muted-foreground">
+                <td colSpan={6} className="text-center py-8 text-muted-foreground">
                   Aucune enveloppe configurée
                 </td>
               </tr>
             ) : (
               enveloppes.map((enveloppe) => (
-                <tr key={enveloppe.id} className="border-t hover:bg-muted/50">
-                  <td className="p-3 font-mono text-sm">{enveloppe.taille}</td>
-                  <td className="p-3">{enveloppe.fullName}</td>
+                <tr key={enveloppe.id} className="border-t hover:bg-muted/50 transition-colors">
+                  <td className="p-3 font-medium">{enveloppe.fullName}</td>
                   <td className="p-3">{enveloppe.poids}g</td>
                   <td className="p-3">{enveloppe.pdsMax}g</td>
                   <td className="p-3 text-xs text-muted-foreground">
@@ -145,10 +152,10 @@ export default function EnveloppesCrud() {
                   </td>
                   <td className="p-3">
                     <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         enveloppe.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
                       }`}
                     >
                       {enveloppe.isActive ? "Actif" : "Inactif"}
@@ -159,6 +166,7 @@ export default function EnveloppesCrud() {
                       variant="outline"
                       size="icon"
                       onClick={() => setEditingEnveloppe(enveloppe)}
+                      title="Modifier"
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -166,6 +174,7 @@ export default function EnveloppesCrud() {
                       variant="destructive"
                       size="icon"
                       onClick={() => setDeletingEnveloppe(enveloppe)}
+                      title="Supprimer"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -245,7 +254,6 @@ function EnveloppeForm({
     initialData
       ? {
           fullName: initialData.fullName,
-          taille: initialData.taille,
           pdsMax: String(initialData.pdsMax),
           poids: String(initialData.poids),
           addrX: String(initialData.addrX),
@@ -270,15 +278,27 @@ function EnveloppeForm({
     setLoading(true);
     setError("");
 
+    if (!formData.fullName.trim()) {
+      setError("Le nom complet est requis");
+      setLoading(false);
+      return;
+    }
+
     try {
       const url = isEditing
         ? `/api/print-options/enveloppes/${initialData.id}`
         : "/api/print-options/enveloppes";
 
+      // Auto-generate taille from fullName (only for new items)
+      const taille = isEditing ? initialData.taille : generateCode(formData.fullName);
+
       const res = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          taille,
+        }),
       });
 
       if (!res.ok) {
@@ -303,19 +323,21 @@ function EnveloppeForm({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="taille">Code taille *</Label>
-          <Input
-            id="taille"
-            value={formData.taille}
-            onChange={(e) => handleChange("taille", e.target.value)}
-            placeholder="Ex: PL, C5, C4"
-            required
-            disabled={isEditing}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="fullName">Nom complet *</Label>
+        <Input
+          id="fullName"
+          value={formData.fullName}
+          onChange={(e) => handleChange("fullName", e.target.value)}
+          placeholder="Ex: Grande Enveloppe G4"
+          required
+        />
+        <p className="text-xs text-muted-foreground">
+          Le nom affiché pour cette enveloppe
+        </p>
+      </div>
 
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="poids">Poids enveloppe (g) *</Label>
           <Input
@@ -339,17 +361,6 @@ function EnveloppeForm({
             required
           />
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="fullName">Nom complet *</Label>
-        <Input
-          id="fullName"
-          value={formData.fullName}
-          onChange={(e) => handleChange("fullName", e.target.value)}
-          placeholder="Ex: Grande Enveloppe G4"
-          required
-        />
       </div>
 
       <div className="border rounded-lg p-4 space-y-4">
@@ -398,22 +409,35 @@ function EnveloppeForm({
         </div>
       </div>
 
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center justify-between p-4 border rounded-lg">
+        <div className="space-y-0.5">
+          <Label htmlFor="isActive">Statut</Label>
+          <p className="text-xs text-muted-foreground">
+            Rendre cette enveloppe disponible
+          </p>
+        </div>
         <Switch
           id="isActive"
           checked={formData.isActive}
           onCheckedChange={(checked) => handleChange("isActive", checked)}
         />
-        <Label htmlFor="isActive">Actif</Label>
       </div>
 
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Annuler
+      <div className="flex gap-2 pt-2">
+        <Button type="submit" disabled={loading} className="flex-1">
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Enregistrement...
+            </>
+          ) : isEditing ? (
+            "Mettre à jour"
+          ) : (
+            "Créer"
+          )}
         </Button>
-        <Button type="submit" disabled={loading}>
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEditing ? "Modifier" : "Créer"}
+        <Button type="button" onClick={onCancel} variant="outline">
+          Annuler
         </Button>
       </div>
     </form>

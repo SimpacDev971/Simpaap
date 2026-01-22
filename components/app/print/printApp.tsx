@@ -166,17 +166,29 @@ export default function PrintApp() {
     return pagesPerEnvelope;
   }, [pagesPerEnvelope, selectedSide]);
 
-  // Weight = sheets weight + envelope weight
+  // Weight of sheets only (used to validate envelope capacity)
+  const sheetsWeight = useMemo(() => {
+    return sheetsPerEnvelope * WEIGHT_PER_SHEET_GRAMS;
+  }, [sheetsPerEnvelope]);
+
+  // Total weight = sheets weight + envelope weight (used for postage calculation)
   const weightPerEnvelope = useMemo(() => {
-    const sheetsWeight = sheetsPerEnvelope * WEIGHT_PER_SHEET_GRAMS;
     const envelopeWeight = selectedEnveloppe?.poids || 0;
     return sheetsWeight + envelopeWeight;
-  }, [sheetsPerEnvelope, selectedEnveloppe]);
+  }, [sheetsWeight, selectedEnveloppe]);
 
   const totalPostageCost = useMemo(() => {
     if (!calculatedRate) return 0;
     return totalLetters * calculatedRate.price;
   }, [totalLetters, calculatedRate]);
+
+  // Filter envelopes that can carry the current weight of sheets
+  const availableEnveloppes = useMemo(() => {
+    // Only show envelopes that can carry the sheets weight
+    return enveloppes.filter(env => {
+      return env.pdsMax >= sheetsWeight;
+    });
+  }, [enveloppes, sheetsWeight]);
 
   // Obtenir le PDF sélectionné pour l'APERÇU
   const selectedPdf = useMemo(() => {
@@ -230,7 +242,7 @@ export default function PrintApp() {
   // 5. Calculate postage when relevant inputs change
   useEffect(() => {
     const calculatePostage = async () => {
-      if (!selectedEnveloppe || weightPerEnvelope <= 0) {
+      if (weightPerEnvelope <= 0) {
         setCalculatedRate(null);
         return;
       }
@@ -241,7 +253,6 @@ export default function PrintApp() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            env_taille: selectedEnveloppe.taille,
             weightGrams: weightPerEnvelope,
             speedId: selectedSpeed?.id || null,
           }),
@@ -260,7 +271,7 @@ export default function PrintApp() {
     };
 
     calculatePostage();
-  }, [selectedEnveloppe, weightPerEnvelope, selectedSpeed]);
+  }, [weightPerEnvelope, selectedSpeed]);
 
   // --- Gestion des fichiers ---
 
@@ -844,12 +855,12 @@ export default function PrintApp() {
 
       <div>
         <Label>Format d&apos;enveloppe</Label>
-        {enveloppes.length > 0 ? (
+        {availableEnveloppes.length > 0 ? (
           <>
             <Select
               value={selectedEnveloppe?.taille || ''}
               onValueChange={(taille) => {
-                const env = enveloppes.find(e => e.taille === taille);
+                const env = availableEnveloppes.find(e => e.taille === taille);
                 if (env) setSelectedEnveloppe(env);
               }}
             >
@@ -857,7 +868,7 @@ export default function PrintApp() {
                 <SelectValue placeholder="Sélectionnez un format" />
               </SelectTrigger>
               <SelectContent>
-                {enveloppes.map((env) => (
+                {availableEnveloppes.map((env) => (
                   <SelectItem key={env.id} value={env.taille}>
                     {env.fullName}
                   </SelectItem>
@@ -865,13 +876,29 @@ export default function PrintApp() {
               </SelectContent>
             </Select>
             {selectedEnveloppe && (
-              <div className="mt-2 text-xs text-muted-foreground">
-                Poids max: {selectedEnveloppe.pdsMax}g
+              <div className="mt-2 text-xs space-y-1">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Poids des feuilles:</span>
+                  <span className="font-medium">{sheetsWeight}g</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Capacité max:</span>
+                  <span className="font-medium">{selectedEnveloppe.pdsMax}g</span>
+                </div>
+                {sheetsWeight > selectedEnveloppe.pdsMax && (
+                  <p className="text-xs text-destructive font-medium">
+                    ⚠️ Veuillez choisir une autre enveloppe !!!
+                  </p>
+                )}
               </div>
             )}
           </>
         ) : (
-          <p className="text-sm text-destructive mt-1">Aucune enveloppe disponible</p>
+          <p className="text-sm text-destructive mt-1">
+            {enveloppes.length === 0
+              ? "Aucune enveloppe disponible"
+              : "Aucune enveloppe ne peut porter ce poids. Réduisez le nombre de pages."}
+          </p>
         )}
       </div>
     </Card>
@@ -1020,11 +1047,11 @@ export default function PrintApp() {
       </div>
       <div className="flex justify-between">
         <span>Enveloppe</span>
-        <span className="font-medium">{selectedEnveloppe?.fullName || '-'}</span>
+        <span className="font-medium">{`${selectedEnveloppe?.fullName} (${selectedEnveloppe?.poids}g)` || '-'}</span>
       </div>
       <div className="flex justify-between">
         <span>Feuilles/dest.</span>
-        <span className="font-medium">{sheetsPerEnvelope}</span>
+        <span className="font-medium">{sheetsPerEnvelope} {`(${sheetsWeight} g)`}</span>
       </div>
       <div className="flex justify-between">
         <span>Poids/dest.</span>
@@ -1056,12 +1083,24 @@ export default function PrintApp() {
         Total affranchissement : {totalPostageCost.toFixed(2)} € HT
         {calculatedRate && <span className="text-sm font-normal text-muted-foreground ml-2">({calculatedRate.fullName})</span>}
       </p>
+      <p className="text-xs text-destructive font-medium mt-1">
+        ⚠️ Estimation - Le prix réel peut différer après traitement
+      </p>
     </div>
 
     <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
       <Button className="flex-1 md:flex-none w-full md:w-auto bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleSubmit}
-        disabled={!sourceFile || isSubmitting || !calculatedRate}
+        disabled={
+          !sourceFile ||
+          isSubmitting ||
+          !selectedColor ||
+          !selectedSide ||
+          !selectedEnveloppe ||
+          !selectedSpeed ||
+          !calculatedRate ||
+          (selectedEnveloppe && sheetsWeight > selectedEnveloppe.pdsMax)
+        }
       >
         {isSubmitting ? 'Traitement...' : 'VALIDER ET ENVOYER'}
       </Button>

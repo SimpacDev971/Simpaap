@@ -1,0 +1,227 @@
+[
+  {
+    "fullName": "ECOPLI (J+4)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "0",
+    "pdsMax": "20",
+    "price": "1.25",
+    "isActive": true
+  },
+  {
+    "fullName": "ECOPLI (J+4)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "21",
+    "pdsMax": "50",
+    "price": "1.97",
+    "isActive": true
+  },
+  {
+    "fullName": "ECOPLI (J+4)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "51",
+    "pdsMax": "100",
+    "price": "2.6",
+    "isActive": true
+  },
+  {
+    "fullName": "ECOPLI (J+4)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "101",
+    "pdsMax": "250",
+    "price": "4.76",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE VERTE (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "0",
+    "pdsMax": "20",
+    "price": "1.3",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE VERTE (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "21",
+    "pdsMax": "50",
+    "price": "2.16",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE VERTE (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "51",
+    "pdsMax": "100",
+    "price": "3.14",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE VERTE (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "101",
+    "pdsMax": "250",
+    "price": "5.15",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE VERTE (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "251",
+    "pdsMax": "500",
+    "price": "7.15",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE VERTE (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "501",
+    "pdsMax": "1000",
+    "price": "9.09",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE VERTE (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "1001",
+    "pdsMax": "2000",
+    "price": "11.01",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "0",
+    "pdsMax": "20",
+    "price": "6.72",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "21",
+    "pdsMax": "50",
+    "price": "7.32",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "51",
+    "pdsMax": "100",
+    "price": "8.16",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "101",
+    "pdsMax": "250",
+    "price": "9.64",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "251",
+    "pdsMax": "500",
+    "price": "11.03",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "501",
+    "pdsMax": "1000",
+    "price": "12.59",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+3)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "1001",
+    "pdsMax": "2000",
+    "price": "14.56",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+2)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "0",
+    "pdsMax": "20",
+    "price": "7.17",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+2)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "21",
+    "pdsMax": "50",
+    "price": "7.77",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+2)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "51",
+    "pdsMax": "100",
+    "price": "8.61",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+2)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "101",
+    "pdsMax": "250",
+    "price": "10.09",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+2)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "251",
+    "pdsMax": "500",
+    "price": "11.48",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+2)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "501",
+    "pdsMax": "1000",
+    "price": "13.04",
+    "isActive": true
+  },
+  {
+    "fullName": "LETTRE RECO (J+2)",
+    "env_taille": "C5_PL",
+    "speedId": null,
+    "pdsMin": "1001",
+    "pdsMax": "2000",
+    "price": "15.01",
+    "isActive": true
+  }
+]

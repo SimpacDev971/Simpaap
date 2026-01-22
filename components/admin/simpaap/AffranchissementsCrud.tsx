@@ -17,14 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
-
-interface Enveloppe {
-  id: number;
-  fullName: string;
-  taille: string;
-}
+import { ArrowUpDown, FileUp, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface Speed {
   id: number;
@@ -37,16 +31,11 @@ interface Affranchissement {
   id: number;
   fullName: string;
   name: string;
-  env_taille: string;
   speedId: number | null;
   pdsMin: number;
   pdsMax: number;
   price: number;
   isActive: boolean;
-  enveloppe?: {
-    fullName: string;
-    taille: string;
-  };
   speed?: {
     id: number;
     value: string;
@@ -56,8 +45,6 @@ interface Affranchissement {
 
 interface AffranchissementFormData {
   fullName: string;
-  name: string;
-  env_taille: string;
   speedId: string;
   pdsMin: string;
   pdsMax: string;
@@ -67,8 +54,6 @@ interface AffranchissementFormData {
 
 const defaultFormData: AffranchissementFormData = {
   fullName: "",
-  name: "",
-  env_taille: "",
   speedId: "",
   pdsMin: "",
   pdsMax: "",
@@ -76,39 +61,49 @@ const defaultFormData: AffranchissementFormData = {
   isActive: true,
 };
 
+// Generate a unique code from fullName
+function generateCode(fullName: string): string {
+  return fullName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove accents
+    .replace(/[^a-z0-9\s]/g, "") // Remove special chars
+    .replace(/\s+/g, "_") // Replace spaces with underscore
+    .substring(0, 50); // Limit length
+}
+
 export default function AffranchissementsCrud() {
   const [affranchissements, setAffranchissements] = useState<Affranchissement[]>([]);
-  const [enveloppes, setEnveloppes] = useState<Enveloppe[]>([]);
   const [speeds, setSpeeds] = useState<Speed[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editingAffranchissement, setEditingAffranchissement] = useState<Affranchissement | null>(null);
   const [deletingAffranchissement, setDeletingAffranchissement] = useState<Affranchissement | null>(null);
-  const [filterEnvTaille, setFilterEnvTaille] = useState<string>("all");
   const [filterSpeedId, setFilterSpeedId] = useState<string>("all");
+  const [showImport, setShowImport] = useState(false);
+  const [sortColumn, setSortColumn] = useState<string>("fullName");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const [affRes, envRes, speedRes] = await Promise.all([
+      const [affRes, speedRes] = await Promise.all([
         fetch("/api/print-options/affranchissements"),
-        fetch("/api/print-options/enveloppes"),
         fetch("/api/print-options/speeds"),
       ]);
 
-      if (!affRes.ok || !envRes.ok || !speedRes.ok) throw new Error("Erreur lors du chargement");
+      if (!affRes.ok || !speedRes.ok) throw new Error("Erreur lors du chargement");
 
-      const [affData, envData, speedData] = await Promise.all([
+      const [affData, speedData] = await Promise.all([
         affRes.json(),
-        envRes.json(),
         speedRes.json(),
       ]);
 
       setAffranchissements(affData);
-      setEnveloppes(envData);
       setSpeeds(speedData);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erreur inconnue";
@@ -129,12 +124,54 @@ export default function AffranchissementsCrud() {
     setDeletingAffranchissement(null);
   };
 
-  const filteredAffranchissements = affranchissements.filter((a) => {
-    const matchEnv = filterEnvTaille === "all" || a.env_taille === filterEnvTaille;
-    const matchSpeed = filterSpeedId === "all" ||
-      (filterSpeedId === "none" ? a.speedId === null : a.speedId === parseInt(filterSpeedId));
-    return matchEnv && matchSpeed;
-  });
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const filteredAndSortedAffranchissements = affranchissements
+    .filter((a) => {
+      const matchSpeed = filterSpeedId === "all" ||
+        (filterSpeedId === "none" ? a.speedId === null : a.speedId === parseInt(filterSpeedId));
+      return matchSpeed;
+    })
+    .sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortColumn) {
+        case "fullName":
+          aVal = a.fullName.toLowerCase();
+          bVal = b.fullName.toLowerCase();
+          break;
+        case "speed":
+          aVal = a.speed?.label.toLowerCase() || "";
+          bVal = b.speed?.label.toLowerCase() || "";
+          break;
+        case "pdsMin":
+          aVal = a.pdsMin;
+          bVal = b.pdsMin;
+          break;
+        case "price":
+          aVal = a.price;
+          bVal = b.price;
+          break;
+        case "isActive":
+          aVal = a.isActive ? 1 : 0;
+          bVal = b.isActive ? 1 : 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
 
   if (loading) {
     return (
@@ -148,24 +185,8 @@ export default function AffranchissementsCrud() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h3 className="text-lg font-semibold">Affranchissements</h3>
+        <h3 className="text-lg font-semibold">Prix affranchissements</h3>
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">Enveloppe:</Label>
-            <Select value={filterEnvTaille} onValueChange={setFilterEnvTaille}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Toutes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes</SelectItem>
-                {enveloppes.map((env) => (
-                  <SelectItem key={env.id} value={env.taille}>
-                    {env.taille} - {env.fullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex items-center gap-2">
             <Label className="text-sm">Vitesse:</Label>
             <Select value={filterSpeedId} onValueChange={setFilterSpeedId}>
@@ -183,6 +204,10 @@ export default function AffranchissementsCrud() {
               </SelectContent>
             </Select>
           </div>
+          <Button onClick={() => setShowImport(true)} size="sm" variant="outline">
+            <FileUp className="mr-2 h-4 w-4" />
+            Importer CSV
+          </Button>
           <Button onClick={() => setShowCreate(true)} size="sm">
             <Plus className="mr-2 h-4 w-4" />
             Ajouter
@@ -200,39 +225,68 @@ export default function AffranchissementsCrud() {
         <table className="w-full">
           <thead className="bg-muted">
             <tr>
-              <th className="text-left p-3 font-medium">Code</th>
-              <th className="text-left p-3 font-medium">Nom complet</th>
-              <th className="text-left p-3 font-medium">Enveloppe</th>
-              <th className="text-left p-3 font-medium">Vitesse</th>
-              <th className="text-left p-3 font-medium">Poids (g)</th>
-              <th className="text-left p-3 font-medium">Prix</th>
-              <th className="text-left p-3 font-medium">Statut</th>
+              <th className="text-left p-3 font-medium">
+                <button
+                  onClick={() => handleSort("fullName")}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Nom complet
+                  <ArrowUpDown className={`h-4 w-4 ${sortColumn === "fullName" ? "text-foreground" : "text-muted-foreground"}`} />
+                </button>
+              </th>
+              <th className="text-left p-3 font-medium">
+                <button
+                  onClick={() => handleSort("speed")}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Affranchissement
+                  <ArrowUpDown className={`h-4 w-4 ${sortColumn === "speed" ? "text-foreground" : "text-muted-foreground"}`} />
+                </button>
+              </th>
+              <th className="text-left p-3 font-medium">
+                <button
+                  onClick={() => handleSort("pdsMin")}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Tranche (g)
+                  <ArrowUpDown className={`h-4 w-4 ${sortColumn === "pdsMin" ? "text-foreground" : "text-muted-foreground"}`} />
+                </button>
+              </th>
+              <th className="text-left p-3 font-medium">
+                <button
+                  onClick={() => handleSort("price")}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Prix
+                  <ArrowUpDown className={`h-4 w-4 ${sortColumn === "price" ? "text-foreground" : "text-muted-foreground"}`} />
+                </button>
+              </th>
+              <th className="text-left p-3 font-medium">
+                <button
+                  onClick={() => handleSort("isActive")}
+                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                >
+                  Statut
+                  <ArrowUpDown className={`h-4 w-4 ${sortColumn === "isActive" ? "text-foreground" : "text-muted-foreground"}`} />
+                </button>
+              </th>
               <th className="text-right p-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredAffranchissements.length === 0 ? (
+            {filteredAndSortedAffranchissements.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-8 text-muted-foreground">
+                <td colSpan={6} className="text-center py-8 text-muted-foreground">
                   Aucun affranchissement configuré
                 </td>
               </tr>
             ) : (
-              filteredAffranchissements.map((aff) => (
-                <tr key={aff.id} className="border-t hover:bg-muted/50">
-                  <td className="p-3 font-mono text-sm">{aff.name}</td>
-                  <td className="p-3">{aff.fullName}</td>
-                  <td className="p-3 text-sm">
-                    <span className="font-mono">{aff.env_taille}</span>
-                    {aff.enveloppe && (
-                      <span className="text-muted-foreground ml-1">
-                        ({aff.enveloppe.fullName})
-                      </span>
-                    )}
-                  </td>
+              filteredAndSortedAffranchissements.map((aff) => (
+                <tr key={aff.id} className="border-t hover:bg-muted/50 transition-colors">
+                  <td className="p-3 font-medium">{aff.fullName}</td>
                   <td className="p-3 text-sm">
                     {aff.speed ? (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                         {aff.speed.label}
                       </span>
                     ) : (
@@ -245,10 +299,10 @@ export default function AffranchissementsCrud() {
                   <td className="p-3 font-medium">{(Math.floor(Number(aff.price) * 100) / 100).toFixed(2)}€</td>
                   <td className="p-3">
                     <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         aff.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400"
                       }`}
                     >
                       {aff.isActive ? "Actif" : "Inactif"}
@@ -259,6 +313,7 @@ export default function AffranchissementsCrud() {
                       variant="outline"
                       size="icon"
                       onClick={() => setEditingAffranchissement(aff)}
+                      title="Modifier"
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -266,6 +321,7 @@ export default function AffranchissementsCrud() {
                       variant="destructive"
                       size="icon"
                       onClick={() => setDeletingAffranchissement(aff)}
+                      title="Supprimer"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -284,7 +340,6 @@ export default function AffranchissementsCrud() {
             <DialogTitle>Ajouter un affranchissement</DialogTitle>
           </DialogHeader>
           <AffranchissementForm
-            enveloppes={enveloppes}
             speeds={speeds}
             onSuccess={handleSuccess}
             onCancel={() => setShowCreate(false)}
@@ -304,7 +359,6 @@ export default function AffranchissementsCrud() {
           {editingAffranchissement && (
             <AffranchissementForm
               initialData={editingAffranchissement}
-              enveloppes={enveloppes}
               speeds={speeds}
               onSuccess={handleSuccess}
               onCancel={() => setEditingAffranchissement(null)}
@@ -331,6 +385,22 @@ export default function AffranchissementsCrud() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={showImport} onOpenChange={setShowImport}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Importer les prix depuis un CSV</DialogTitle>
+          </DialogHeader>
+          <ImportCSV
+            onSuccess={() => {
+              handleSuccess();
+              setShowImport(false);
+            }}
+            onCancel={() => setShowImport(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -338,13 +408,11 @@ export default function AffranchissementsCrud() {
 // AffranchissementForm Component
 function AffranchissementForm({
   initialData,
-  enveloppes,
   speeds,
   onSuccess,
   onCancel,
 }: {
   initialData?: Affranchissement;
-  enveloppes: Enveloppe[];
   speeds: Speed[];
   onSuccess: () => void;
   onCancel: () => void;
@@ -353,8 +421,6 @@ function AffranchissementForm({
     initialData
       ? {
           fullName: initialData.fullName,
-          name: initialData.name,
-          env_taille: initialData.env_taille,
           speedId: initialData.speedId ? String(initialData.speedId) : "",
           pdsMin: String(initialData.pdsMin),
           pdsMax: String(initialData.pdsMax),
@@ -377,15 +443,27 @@ function AffranchissementForm({
     setLoading(true);
     setError("");
 
+    if (!formData.fullName.trim()) {
+      setError("Le nom complet est requis");
+      setLoading(false);
+      return;
+    }
+
     try {
       const url = isEditing
         ? `/api/print-options/affranchissements/${initialData.id}`
         : "/api/print-options/affranchissements";
 
+      // Auto-generate name from fullName (only for new items)
+      const name = isEditing ? initialData.name : generateCode(formData.fullName);
+
       const res = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          name,
+        }),
       });
 
       if (!res.ok) {
@@ -410,125 +488,110 @@ function AffranchissementForm({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Code *</Label>
-          <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => handleChange("name", e.target.value)}
-            placeholder="Ex: G4, ECOPLI"
-            required
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="fullName">Nom complet *</Label>
+        <Input
+          id="fullName"
+          value={formData.fullName}
+          onChange={(e) => handleChange("fullName", e.target.value)}
+          placeholder="Ex: ECOPLI Standard"
+          required
+        />
+        <p className="text-xs text-muted-foreground">
+          Le nom affiché pour cet affranchissement
+        </p>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="env_taille">Enveloppe *</Label>
-          <Select
-            value={formData.env_taille}
-            onValueChange={(value) => handleChange("env_taille", value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner..." />
-            </SelectTrigger>
-            <SelectContent>
-              {enveloppes.map((env) => (
-                <SelectItem key={env.id} value={env.taille}>
-                  {env.taille} - {env.fullName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="space-y-2">
+        <Label htmlFor="speedId">Vitesse</Label>
+        <Select
+          value={formData.speedId}
+          onValueChange={(value) => handleChange("speedId", value)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Aucune (optionnel)" />
+          </SelectTrigger>
+          <SelectContent>
+            {speeds.filter(s => s.isActive).map((speed) => (
+              <SelectItem key={speed.id} value={String(speed.id)}>
+                {speed.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="border rounded-lg p-4 space-y-4">
+        <h4 className="text-sm font-medium">Tranche de poids et prix</h4>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="pdsMin">Poids min (g) *</Label>
+            <Input
+              id="pdsMin"
+              type="number"
+              value={formData.pdsMin}
+              onChange={(e) => handleChange("pdsMin", e.target.value)}
+              placeholder="0"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="pdsMax">Poids max (g) *</Label>
+            <Input
+              id="pdsMax"
+              type="number"
+              value={formData.pdsMax}
+              onChange={(e) => handleChange("pdsMax", e.target.value)}
+              placeholder="20"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="price">Prix (€) *</Label>
+            <Input
+              id="price"
+              type="number"
+              step="0.01"
+              value={formData.price}
+              onChange={(e) => handleChange("price", e.target.value)}
+              placeholder="1.20"
+              required
+            />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="fullName">Nom complet *</Label>
-          <Input
-            id="fullName"
-            value={formData.fullName}
-            onChange={(e) => handleChange("fullName", e.target.value)}
-            placeholder="Ex: ECOPLI Standard"
-            required
-          />
+      <div className="flex items-center justify-between p-4 border rounded-lg">
+        <div className="space-y-0.5">
+          <Label htmlFor="isActive">Statut</Label>
+          <p className="text-xs text-muted-foreground">
+            Rendre cet affranchissement disponible
+          </p>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="speedId">Vitesse</Label>
-          <Select
-            value={formData.speedId}
-            onValueChange={(value) => handleChange("speedId", value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner..." />
-            </SelectTrigger>
-            <SelectContent>
-              {speeds.filter(s => s.isActive).map((speed) => (
-                <SelectItem key={speed.id} value={String(speed.id)}>
-                  {speed.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="pdsMin">Poids min (g) *</Label>
-          <Input
-            id="pdsMin"
-            type="number"
-            value={formData.pdsMin}
-            onChange={(e) => handleChange("pdsMin", e.target.value)}
-            placeholder="0"
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="pdsMax">Poids max (g) *</Label>
-          <Input
-            id="pdsMax"
-            type="number"
-            value={formData.pdsMax}
-            onChange={(e) => handleChange("pdsMax", e.target.value)}
-            placeholder="20"
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="price">Prix (€) *</Label>
-          <Input
-            id="price"
-            type="number"
-            step="0.01"
-            value={formData.price}
-            onChange={(e) => handleChange("price", e.target.value)}
-            placeholder="1.20"
-            required
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center space-x-2">
         <Switch
           id="isActive"
           checked={formData.isActive}
           onCheckedChange={(checked) => handleChange("isActive", checked)}
         />
-        <Label htmlFor="isActive">Actif</Label>
       </div>
 
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Annuler
+      <div className="flex gap-2 pt-2">
+        <Button type="submit" disabled={loading} className="flex-1">
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Enregistrement...
+            </>
+          ) : isEditing ? (
+            "Mettre à jour"
+          ) : (
+            "Créer"
+          )}
         </Button>
-        <Button type="submit" disabled={loading}>
-          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEditing ? "Modifier" : "Créer"}
+        <Button type="button" onClick={onCancel} variant="outline">
+          Annuler
         </Button>
       </div>
     </form>
@@ -609,6 +672,203 @@ function DeleteAffranchissement({
           Supprimer
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ImportCSV Component
+function ImportCSV({
+  onSuccess,
+  onCancel,
+}: {
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [preview, setPreview] = useState<string>("");
+  const [importResult, setImportResult] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      if (!selectedFile.name.endsWith('.csv')) {
+        setError("Le fichier doit être un CSV");
+        return;
+      }
+      setFile(selectedFile);
+      setError("");
+
+      // Read file to show preview
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').slice(0, 6); // Show first 6 lines
+        setPreview(lines.join('\n'));
+      };
+      reader.readAsText(selectedFile);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!file) {
+      setError("Veuillez sélectionner un fichier");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Read CSV file
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const csvText = event.target?.result as string;
+
+        // Send to API
+        const res = await fetch("/api/print-options/affranchissements/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ csvData: csvText }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Erreur lors de l'import");
+        }
+
+        const result = await res.json();
+        console.log("Import result:", result);
+        setImportResult(result);
+        setLoading(false);
+
+        // Auto-close and refresh after showing results for a moment
+        setTimeout(() => {
+          onSuccess();
+        }, 3000);
+      };
+
+      reader.onerror = () => {
+        setError("Erreur lors de la lecture du fichier");
+        setLoading(false);
+      };
+
+      reader.readAsText(file);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur inconnue";
+      setError(message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="bg-destructive/20 border border-destructive text-destructive px-4 py-3 rounded text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label>Format du fichier CSV</Label>
+        <p className="text-xs text-muted-foreground">
+          Le fichier doit contenir les colonnes suivantes séparées par des points-virgules (;):
+        </p>
+        <pre className="text-xs bg-muted p-2 rounded">
+          Afranchissement;fullname;tranche;prix
+        </pre>
+        <p className="text-xs text-muted-foreground">
+          Exemple: ECOPLI;ECOPLI (J+4);0-20;1,25
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="csv-file">Fichier CSV</Label>
+        <Input
+          id="csv-file"
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleFileChange}
+        />
+      </div>
+
+      {preview && (
+        <div className="space-y-2">
+          <Label>Aperçu (premières lignes)</Label>
+          <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-32">
+            {preview}
+          </pre>
+        </div>
+      )}
+
+      {!importResult ? (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 rounded text-sm">
+          <p className="font-medium mb-1">ℹ️ Mode de fonctionnement</p>
+          <ul className="text-xs space-y-1 list-disc list-inside">
+            <li><strong>Mise à jour intelligente:</strong> Les prix existants sont mis à jour (pas de suppression)</li>
+            <li><strong>Préservation des réglages:</strong> Le statut actif/inactif est conservé</li>
+            <li><strong>Création automatique:</strong> Les nouveaux prix sont créés automatiquement</li>
+            <li><strong>Liaison des vitesses:</strong> Les vitesses d'affranchissement sont liées automatiquement</li>
+          </ul>
+        </div>
+      ) : (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4 rounded space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-green-500 dark:bg-green-600 flex items-center justify-center">
+              <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-semibold text-green-900 dark:text-green-100">Import réussi!</p>
+              <p className="text-sm text-green-700 dark:text-green-300">{importResult.message}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 pt-2">
+            <div className="text-center p-2 bg-white dark:bg-gray-800 rounded">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{importResult.updated || 0}</p>
+              <p className="text-xs text-muted-foreground">Mis à jour</p>
+            </div>
+            <div className="text-center p-2 bg-white dark:bg-gray-800 rounded">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{importResult.created || 0}</p>
+              <p className="text-xs text-muted-foreground">Créés</p>
+            </div>
+            <div className="text-center p-2 bg-white dark:bg-gray-800 rounded">
+              <p className="text-2xl font-bold text-gray-600 dark:text-gray-400">{importResult.skipped || 0}</p>
+              <p className="text-xs text-muted-foreground">Ignorés</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!importResult && (
+        <div className="flex gap-2 pt-2">
+          <Button
+            onClick={handleImport}
+            disabled={loading || !file}
+            className="flex-1"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Import en cours...
+              </>
+            ) : (
+              <>
+                <FileUp className="mr-2 h-4 w-4" />
+                Importer
+              </>
+            )}
+          </Button>
+          <Button type="button" onClick={onCancel} variant="outline">
+            Annuler
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
