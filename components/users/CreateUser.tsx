@@ -155,7 +155,7 @@ export default function CreateUser({
             placeholder="email@example.com"
           />
           <p className="text-xs text-muted-foreground mt-1">
-            Un email d'invitation sera envoyé avec le lien de connexion et le mot de passe par défaut: <code className="bg-muted px-1 py-0.5 rounded">password</code>
+            Un email d'invitation sera envoyé avec le lien de connexion et un mot de passe sécurisé généré automatiquement.
           </p>
         </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { PasswordStrengthIndicator, isPasswordValid } from "./PasswordStrengthIndicator";
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
@@ -35,8 +36,8 @@ export default function ResetPassword() {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Le mot de passe doit contenir au moins 8 caractères");
+    if (!isPasswordValid(password)) {
+      setError("Le mot de passe ne respecte pas les critères de sécurité");
       setLoading(false);
       return;
     }
@@ -109,8 +110,9 @@ export default function ResetPassword() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 appearance-none relative block w-full px-3 py-2 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring sm:text-sm"
                 placeholder="••••••••"
-                minLength={8}
+                minLength={10}
               />
+              <PasswordStrengthIndicator password={password} />
             </div>
 
             <div>
@@ -124,10 +126,22 @@ export default function ResetPassword() {
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring sm:text-sm"
+                className={`mt-1 appearance-none relative block w-full px-3 py-2 border placeholder:text-muted-foreground text-foreground bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring sm:text-sm ${
+                  confirmPassword && password !== confirmPassword
+                    ? 'border-red-500'
+                    : confirmPassword && password === confirmPassword
+                    ? 'border-green-500'
+                    : 'border-input'
+                }`}
                 placeholder="••••••••"
-                minLength={8}
+                minLength={10}
               />
+              {confirmPassword && password !== confirmPassword && (
+                <p className="mt-1 text-sm text-red-500">Les mots de passe ne correspondent pas</p>
+              )}
+              {confirmPassword && password === confirmPassword && (
+                <p className="mt-1 text-sm text-green-600">Les mots de passe correspondent</p>
+              )}
             </div>
 
             {error && (
@@ -139,7 +153,7 @@ export default function ResetPassword() {
             <div>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !isPasswordValid(password) || password !== confirmPassword}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? "Réinitialisation..." : "Réinitialiser"}

@@ -23,10 +23,7 @@ import { Label } from "../../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 import PdfViewer from "../PdfViewer";
 
-// --- DÉBUT DE LA CORRECTION CRITIQUE (Web Worker PDF.js) ---
-// Utilisation de la version de pdfjs incluse dans react-pdf pour éviter les conflits de version
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-// --- FIN DE LA CORRECTION CRITIQUE ---
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 // --- Types & Constants ---
 

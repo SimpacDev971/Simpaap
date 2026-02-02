@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/security";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import NextAuth, { type AuthOptions } from "next-auth";
@@ -7,7 +8,11 @@ import Credentials from "next-auth/providers/credentials";
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
 
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 24 * 60 * 60, // 24 hours
+    updateAge: 60 * 60, // Refresh token every hour
+  },
 
   providers: [
     Credentials({
@@ -18,17 +23,25 @@ export const authOptions: AuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password)
-          throw new Error("Email et mot de passe requis");
+          throw new Error("Identifiants invalides");
+
+        // Rate limiting on login attempts
+        const rateLimitKey = `login:${credentials.email.toLowerCase()}`;
+        const rateLimit = checkRateLimit(rateLimitKey, RATE_LIMITS.login.limit, RATE_LIMITS.login.windowMs);
+        if (!rateLimit.allowed) {
+          throw new Error("Trop de tentatives. Réessayez plus tard.");
+        }
 
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
           include: { tenant: true },
         });
 
-        if (!user) throw new Error("Utilisateur introuvable");
+        // Generic error message to prevent user enumeration
+        if (!user) throw new Error("Identifiants invalides");
 
         const valid = await compare(credentials.password, user.password);
-        if (!valid) throw new Error("Mot de passe incorrect");
+        if (!valid) throw new Error("Identifiants invalides");
 
         return {
           id: user.id.toString(),

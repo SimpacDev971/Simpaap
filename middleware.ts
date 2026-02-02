@@ -4,94 +4,265 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 // ────────────────────────────────────────────────
-// 🚀 TENANT CACHE avec LRU
+// 🚀 TENANT CACHE avec LRU (TTL réduit à 2 minutes pour sécurité)
 // ────────────────────────────────────────────────
-const tenantCache = new LRUCache<string, boolean>({
-  max: 500, // Maximum 500 tenants en cache
-  ttl: 1000 * 60 * 5, // TTL = 5 minutes
-  updateAgeOnGet: true, // Reset TTL à chaque accès
-  updateAgeOnHas: false,
+// Separate caches for positive and negative results
+// Positive: tenant exists → cache 2 minutes, refresh on access
+const tenantCachePositive = new LRUCache<string, true>({
+  max: 500,
+  ttl: 1000 * 60 * 2,
+  updateAgeOnGet: true,
 });
 
-// Cache pour stocker TOUS les tenants (refresh périodique)
+// Negative: tenant doesn't exist → cache 30 seconds, NO refresh on access (allows retry)
+const tenantCacheNegative = new LRUCache<string, false>({
+  max: 200,
+  ttl: 1000 * 30,
+  updateAgeOnGet: false,
+});
+
 let allTenantsCache: Set<string> | null = null;
 let lastRefresh = 0;
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes (reduced)
+
+// ────────────────────────────────────────────────
+// 🚨 DB DOWN ALERT (Edge-compatible, via Mailjet REST API)
+// ────────────────────────────────────────────────
+let lastAlertSent = 0;
+const ALERT_COOLDOWN = 10 * 60 * 1000; // 1 alert max per 10 minutes
+let consecutiveFailures = 0;
+const FAILURE_THRESHOLD = 3; // Send alert after 3 consecutive failures
+
+async function sendDbDownAlert(errorContext: string) {
+  const now = Date.now();
+
+  // Cooldown: don't spam developer
+  if (now - lastAlertSent < ALERT_COOLDOWN) return;
+
+  const apiKey = process.env.MAILJET_API_KEY;
+  const apiSecret = process.env.MAILJET_API_SECRET;
+  const senderEmail = process.env.MAILJET_SENDER_EMAIL;
+  const devEmail = process.env.DEV_ALERT_EMAIL;
+
+  if (!apiKey || !apiSecret || !senderEmail || !devEmail) return;
+
+  try {
+    const credentials = btoa(`${apiKey}:${apiSecret}`);
+    const timestamp = new Date().toISOString();
+
+    await fetch('https://api.mailjet.com/v3.1/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        Messages: [
+          {
+            From: { Email: senderEmail, Name: 'Simpaap Alert' },
+            To: [{ Email: devEmail }],
+            Subject: `[ALERTE CRITIQUE] Simpaap - Base de données inaccessible`,
+            TextPart: [
+              `ALERTE SECURITE - Base de données inaccessible`,
+              ``,
+              `Date/Heure: ${timestamp}`,
+              `Contexte: ${errorContext}`,
+              `Echecs consecutifs: ${consecutiveFailures}`,
+              ``,
+              `L'application Simpaap ne parvient pas a contacter la base de données.`,
+              `Les tenants ne peuvent plus être resolus. Le cache existant est utilisé en fallback.`,
+              ``,
+              `Actions recommandées:`,
+              `- Verifier le serveur PostgreSQL`,
+              `- Verifier la connectivite reseau`,
+              `- Verifier les variables DATABASE_URL / DIRECT_URL`,
+              `- Consulter les logs du serveur`,
+              ``,
+              `-- Simpaap Middleware Alert System`,
+            ].join('\n'),
+            HTMLPart: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: #dc2626; color: white; padding: 15px 20px; border-radius: 8px 8px 0 0;">
+                  <h2 style="margin: 0;">ALERTE CRITIQUE</h2>
+                  <p style="margin: 5px 0 0;">Base de données inaccessible</p>
+                </div>
+                <div style="border: 1px solid #e5e7eb; border-top: none; padding: 20px; border-radius: 0 0 8px 8px;">
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                      <td style="padding: 8px 0; font-weight: bold; color: #374151;">Date/Heure</td>
+                      <td style="padding: 8px 0; color: #6b7280;">${timestamp}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px 0; font-weight: bold; color: #374151;">Contexte</td>
+                      <td style="padding: 8px 0; color: #6b7280;">${errorContext}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px 0; font-weight: bold; color: #374151;">Echecs consecutifs</td>
+                      <td style="padding: 8px 0; color: #dc2626; font-weight: bold;">${consecutiveFailures}</td>
+                    </tr>
+                  </table>
+                  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
+                  <p style="color: #374151;">L'application ne parvient pas a contacter la base de données. Le cache existant est utilisé en fallback.</p>
+                  <h3 style="color: #374151; margin-top: 20px;">Actions recommandées</h3>
+                  <ul style="color: #6b7280; line-height: 1.8;">
+                    <li>Vérifier le serveur PostgreSQL</li>
+                    <li>Vérifier la connectivité réseau</li>
+                    <li>Vérifier les variables DATABASE_URL / DIRECT_URL</li>
+                    <li>Consulter les logs du serveur</li>
+                  </ul>
+                  <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">Simpaap Middleware Alert System</p>
+                </div>
+              </div>
+            `,
+            CustomID: 'db-down-alert',
+          },
+        ],
+      }),
+    });
+
+    lastAlertSent = now;
+  } catch {
+    // Alert send failed — nothing else we can do from Edge Runtime
+  }
+}
 
 /**
- * 🔄 Refresh la liste complète des tenants depuis la DB
+ * Generate internal API token for secure middleware-to-API communication
+ * Uses Web Crypto API (Edge Runtime compatible) with SHA-256 digest
+ */
+async function generateInternalApiToken(): Promise<string> {
+  const secret = process.env.NEXTAUTH_SECRET || 'fallback-secret';
+  const timestamp = Math.floor(Date.now() / (5 * 60 * 1000));
+  const payload = `${secret}:internal-api:${timestamp}`;
+
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(payload));
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Validate subdomain format (security check)
+ */
+function isValidSubdomainFormat(subdomain: string): boolean {
+  return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain.toLowerCase());
+}
+
+/**
+ * Refresh tenant list with secure internal token
  */
 async function refreshAllTenants(baseUrl: string): Promise<Set<string>> {
   const now = Date.now();
-  
-  // Si le cache est encore valide, on le retourne
+
   if (allTenantsCache && (now - lastRefresh) < REFRESH_INTERVAL) {
+    consecutiveFailures = 0; // Cache is valid, reset failures
     return allTenantsCache;
   }
 
   try {
-    console.log("🔄 Refreshing all tenants from DB...");
-    // ⚠️ Assurez-vous que cette route est publique et ne nécessite pas d'authentification
-    console.log("baseUrl : ",baseUrl)
-    const response = await fetch(`${baseUrl}/api/tenant/list`);
-    
+    const internalToken = await generateInternalApiToken();
+    const response = await fetch(`${baseUrl}/api/tenant/list`, {
+      headers: {
+        'x-internal-token': internalToken,
+      },
+    });
+
     if (response.ok) {
       const data = await response.json();
       const tenants = new Set<string>(data.tenants || []);
-      
+
       allTenantsCache = tenants;
       lastRefresh = now;
-      
-      // Pré-remplir le LRU cache avec tous les tenants
-      tenants.forEach(tenant => tenantCache.set(tenant, true));
-      
-      console.log(`✅ Cached ${tenants.size} tenants`);
+      consecutiveFailures = 0; // Success: reset counter
+
+      tenants.forEach(tenant => tenantCachePositive.set(tenant, true));
+
       return tenants;
     }
+
+    // Non-OK response (500 = likely DB error)
+    consecutiveFailures++;
+    if (consecutiveFailures >= FAILURE_THRESHOLD) {
+      await sendDbDownAlert(
+        `refreshAllTenants - HTTP ${response.status} from /api/tenant/list`
+      );
+    }
   } catch (e) {
-    console.error("❌ Error refreshing tenants:", e);
+    consecutiveFailures++;
+    if (consecutiveFailures >= FAILURE_THRESHOLD) {
+      await sendDbDownAlert(
+        `refreshAllTenants - fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`
+      );
+    }
   }
 
-  // Fallback : retourner le cache existant ou un Set vide
   return allTenantsCache || new Set();
 }
 
 /**
- * ✅ Vérifie si un tenant existe (avec cache intelligent)
+ * Check if tenant exists (with security validation)
  */
 async function tenantExists(subdomain: string, baseUrl: string): Promise<boolean> {
-  // 1️⃣ Check LRU cache (ultra-rapide)
-  const cached = tenantCache.get(subdomain);
-  if (cached !== undefined) {
-    console.log(`⚡ Tenant "${subdomain}" found in LRU cache. Value: ${cached}`);
-    return cached;
+  // Security: Validate subdomain format first
+  if (!isValidSubdomainFormat(subdomain)) {
+    return false;
   }
 
-  // 2️⃣ Check allTenantsCache
-  const allTenants = await refreshAllTenants(baseUrl);
-  if (allTenants.has(subdomain)) {
-    console.log(`✅ Tenant "${subdomain}" found in global cache`);
-    tenantCache.set(subdomain, true);
+  // 1. Check positive cache (tenant exists)
+  if (tenantCachePositive.get(subdomain)) {
     return true;
   }
 
-  // 3️⃣ Fallback : vérification DB individuelle (rare)
+  // 2. Check negative cache (tenant doesn't exist) — short TTL, allows retry
+  if (tenantCacheNegative.has(subdomain)) {
+    return false;
+  }
+
+  // 3. Check global cache
+  const allTenants = await refreshAllTenants(baseUrl);
+  if (allTenants.has(subdomain)) {
+    tenantCachePositive.set(subdomain, true);
+    return true;
+  }
+
+  // 3. Fallback: Individual DB check with internal token
   try {
-    console.log(`🔍 Checking tenant "${subdomain}" in DB...`);
-    const response = await fetch(`${baseUrl}/api/tenant?subdomain=${subdomain}`);
-    const exists = response.ok;
-    
-    // Cache le résultat (même négatif pour éviter spam)
-    tenantCache.set(subdomain, exists);
-    
-    // Si trouvé, l'ajouter au cache global
-    if (exists && allTenantsCache) {
-      allTenantsCache.add(subdomain);
+    const internalToken = await generateInternalApiToken();
+    const response = await fetch(`${baseUrl}/api/tenant?subdomain=${encodeURIComponent(subdomain)}`, {
+      headers: {
+        'x-internal-token': internalToken,
+      },
+    });
+
+    if (response.status >= 500) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= FAILURE_THRESHOLD) {
+        await sendDbDownAlert(
+          `tenantExists("${subdomain}") - HTTP ${response.status} from /api/tenant`
+        );
+      }
+      return false;
     }
-    
+
+    consecutiveFailures = 0;
+    const exists = response.ok;
+
+    if (exists) {
+      tenantCachePositive.set(subdomain, true);
+      if (allTenantsCache) allTenantsCache.add(subdomain);
+    } else {
+      tenantCacheNegative.set(subdomain, false);
+    }
+
     return exists;
   } catch (e) {
-    console.error(`❌ Error checking tenant "${subdomain}":`, e);
+    consecutiveFailures++;
+    if (consecutiveFailures >= FAILURE_THRESHOLD) {
+      await sendDbDownAlert(
+        `tenantExists("${subdomain}") - fetch failed: ${e instanceof Error ? e.message : 'Unknown error'}`
+      );
+    }
     return false;
   }
 }
@@ -115,13 +286,21 @@ export async function middleware(req: NextRequest) {
   let hostname = req.headers.get("host") || "";
   hostname = hostname.split(":")[0];
 
-  const allowedDomains = [
-    "print.simp.ac",
-    "www.print.simp.ac",
-    "tudominio.ar",
-    "www.tudominio.ar",
-    "localhost",
-  ];
+  // Security: Remove localhost in production
+  const allowedDomains = process.env.NODE_ENV === 'production'
+    ? [
+        "print.simp.ac",
+        "www.print.simp.ac",
+        "tudominio.ar",
+        "www.tudominio.ar",
+      ]
+    : [
+        "print.simp.ac",
+        "www.print.simp.ac",
+        "tudominio.ar",
+        "www.tudominio.ar",
+        "localhost",
+      ];
 
   // 1. Détermination du sous-domaine potentiel
   const hostSegments = hostname.split(".");
@@ -141,31 +320,37 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req });
   const sessionTenant = token?.userTenant || null;
   
-  const baseUrl =
-    process.env.NEXTAUTH_URL ||
-    process.env.NEXT_PUBLIC_URL ||
-    `http://localhost:${url.port || 3000}`;
+  // Build baseUrl for internal API calls
+  // In dev (port present): always use localhost to avoid DNS issues with subdomains
+  // In prod (no port): use the request origin (same server)
+  const requestHost = req.headers.get("host") || "localhost:3000";
+  const portMatch = requestHost.match(/:(\d+)$/);
+  const baseUrl = portMatch
+    ? `http://localhost:${portMatch[1]}`
+    : `${url.protocol}//${requestHost}`;
 
   // ────────────────────────────────────────────────
-  // 🧠 1) SUBDOMAIN CASE → tenant.print.simp.ac (Logique Stricte)
+  // 🧠 1) SUBDOMAIN CASE → tenant.print.simp.ac
   // ────────────────────────────────────────────────
   if (subdomain) {
-    // 1. Rewrite si session match
+    // Security: Validate subdomain format
+    if (!isValidSubdomainFormat(subdomain)) {
+      return new NextResponse(null, { status: 404 });
+    }
+
+    // 1. Rewrite if session matches
     if (sessionTenant === subdomain) {
-      console.log("⚡ Session matches subdomain → rewrite immediately");
       return NextResponse.rewrite(new URL(`/${subdomain}${url.pathname}`, req.url));
     }
 
-    // 2. Vérification DB/Cache: Le sous-domaine doit être un tenant existant.
+    // 2. Verify tenant exists
     const exists = await tenantExists(subdomain, baseUrl);
 
     if (exists) {
-      console.log(`✅ Valid tenant subdomain "${subdomain}" → rewrite`);
       return NextResponse.rewrite(new URL(`/${subdomain}${url.pathname}`, req.url));
     }
 
-    // ⛔ BLOCAGE : Sous-domaine inconnu non-tenant.
-    console.log(`❌ Invalid subdomain "${subdomain}" (not a tenant) → 404`);
+    // Block unknown subdomains
     return new NextResponse(null, { status: 404 });
   }
 
@@ -180,46 +365,31 @@ export async function middleware(req: NextRequest) {
   let routePathPrefix = potentialSubdomain && isReserved ? potentialSubdomain : null;
   const fullPathSegment = routePathPrefix || first;
 
-  // On entre dans ce bloc si on est sur le domaine principal OU un sous-domaine réservé
+  // Main domain or reserved subdomain handling
   if (isMainDomain || isReserved) {
-      
-    // Si c'est la racine (pas de premier segment) → Autorisé
+
     if (!fullPathSegment) {
-        console.log("✅ Root path (/) → allow");
         return NextResponse.next();
     }
-    
-    // Concaténation de toutes les routes autorisées (standard, publique, et réservée)
+
     const authorizedRoutes = [...standardRoutes, ...publicRoutes, ...reservedSubdomains];
-    
-    // 1. Vérification : Si le segment n'est pas dans la liste autorisée
+
     if (!authorizedRoutes.includes(fullPathSegment)) {
-      
-        // Tentative de vérification : Est-ce un tenant qui essaie d'accéder par la mauvaise méthode ?
         const existsAsTenant = await tenantExists(fullPathSegment, baseUrl);
-        
+
         if (existsAsTenant) {
-            // C'est un tenant -> Bloqué pour forcer l'usage du sous-domaine.
-            console.log(`🚫 Tenant path "/${fullPathSegment}" blocked (use subdomain)`);
             return new NextResponse(null, { status: 404 });
         }
-        
-        // ⛔ BLOCAGE : Ni public, ni réservé, ni un tenant.
-        console.log(`❌ Unauthorized path "/${fullPathSegment}" → 404`);
+
         return new NextResponse(null, { status: 404 });
     }
 
-    // 2. Si c'est un sous-domaine RESERVÉ (ex: admin.localhost)
     if (isReserved) {
-        console.log(`➡️ Rewriting reserved subdomain "${routePathPrefix}"`);
-        // Réécrire vers le dossier racine correspondant (ex: /admin/dashboard)
         return NextResponse.rewrite(
             new URL(`/${routePathPrefix}${url.pathname}`, req.url)
         );
     }
   }
 
-  // Si rien n'a matché (route standard/publique sur main domain)
-  console.log("✅ Main domain/Public route → allow");
   return NextResponse.next();
 }

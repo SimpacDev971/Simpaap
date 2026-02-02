@@ -1,20 +1,40 @@
 import { MailjetNotConfiguredError, sendEmail } from '@/lib/email';
 import prisma from '@/lib/prisma';
+import { checkRateLimit, RATE_LIMITS, isValidEmail, buildResetUrl, escapeHtml } from '@/lib/security';
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   const { email } = await req.json();
   if (!email) return NextResponse.json({ error: 'Missing email' }, { status: 400 });
-  const user = await prisma.user.findUnique({ 
+
+  // Validate email format
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: 'Format d\'email invalide' }, { status: 400 });
+  }
+
+  // Rate limiting by email
+  const rateLimit = checkRateLimit(`forgot-password:${email.toLowerCase()}`, RATE_LIMITS.forgotPassword.limit, RATE_LIMITS.forgotPassword.windowMs);
+  if (!rateLimit.allowed) {
+    // Still return ok to prevent enumeration
+    return NextResponse.json({ ok: true });
+  }
+
+  const user = await prisma.user.findUnique({
     where: { email },
     include: { tenant: true }
   });
-  // Jamais d'info d'existence de l'email pour sécurité.
+
+  // Always return success to prevent user enumeration
   if (user) {
+    // Delete any existing tokens for this email (prevent token accumulation)
+    await prisma.passwordResetToken.deleteMany({
+      where: { email }
+    });
+
     const token = crypto.randomBytes(32).toString('hex');
-    // 1h de validité
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
+
     await prisma.passwordResetToken.create({
       data: {
         email,
@@ -22,14 +42,11 @@ export async function POST(req: NextRequest) {
         expiresAt,
       },
     });
-    
-    // En production, utiliser l'URL du tenant si l'utilisateur appartient à un tenant
+
     const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
-    const resetUrl = user.tenantId 
-      ? baseUrl.replace('://', `://${user.tenant?.subdomain}.`) + `/reset-password?token=${token}`
-      : `${baseUrl}/reset-password?token=${token}`;
+    const resetUrl = buildResetUrl(baseUrl, user.tenant?.subdomain || null, token);
     
-    const displayName = user.name?.length ? user.name : 'utilisateur';
+    const displayName = user.name?.length ? escapeHtml(user.name) : 'utilisateur';
     
     try {
       await sendEmail({
@@ -81,13 +98,12 @@ export async function POST(req: NextRequest) {
       });
     } catch (error) {
       if (error instanceof MailjetNotConfiguredError) {
-        console.warn('Email provider non configuré — email de réinitialisation non envoyé.');
-        console.log(`[RESET] Pour ${email} : ${resetUrl}`);
-      } else {
-        console.error('Erreur envoi email de réinitialisation:', error);
-        // Log the URL as fallback for development
-        console.log(`[RESET] Pour ${email} : ${resetUrl}`);
+        // Dev only: log token ID (not full URL) for debugging
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[DEV] Email not configured - check database for reset token');
+        }
       }
+      // Don't log sensitive information like reset URLs
     }
   }
   return NextResponse.json({ ok: true });

@@ -1,5 +1,13 @@
 import { MailjetNotConfiguredError, sendMailjetEmail } from '@/lib/mailjet';
 import prisma from '@/lib/prisma';
+import {
+  generateSecurePassword,
+  isValidEmail,
+  checkRateLimit,
+  RATE_LIMITS,
+  escapeHtml,
+  validatePassword
+} from '@/lib/security';
 import { hash } from 'bcryptjs';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,23 +20,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Rate limiting
+    const rateLimit = checkRateLimit(`create-user:${session.user.id}`, RATE_LIMITS.createUser.limit, RATE_LIMITS.createUser.windowMs);
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ error: 'Trop de requêtes. Réessayez plus tard.' }, { status: 429 });
+    }
+
     const { email, password, name, role, tenantSubdomain } = await req.json();
 
-    // Champs obligatoires
     if (!email) {
       return NextResponse.json({ error: 'Email requis' }, { status: 400 });
     }
 
-    // Vérifier si l'email existe déjà
+    // Validate email format
+    if (!isValidEmail(email)) {
+      return NextResponse.json({ error: 'Format d\'email invalide' }, { status: 400 });
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       return NextResponse.json({ error: 'Utilisateur avec cet email existe déjà' }, { status: 409 });
     }
 
-    // Utiliser le mot de passe fourni ou le mot de passe par défaut
-    const defaultPassword = password || 'password';
-    // Hachage du mot de passe
-    const hashedPassword = await hash(defaultPassword, 10);
+    // Generate secure password or validate provided one
+    let finalPassword: string;
+    if (password) {
+      const validation = validatePassword(password);
+      if (!validation.isValid) {
+        return NextResponse.json({ error: validation.errors.join('. ') }, { status: 400 });
+      }
+      finalPassword = password;
+    } else {
+      finalPassword = generateSecurePassword(16);
+    }
+
+    const hashedPassword = await hash(finalPassword, 12);
 
     // Création utilisateur
     const userData: any = {
@@ -50,13 +76,12 @@ export async function POST(req: NextRequest) {
     const newUser = await prisma.user.create({ data: userData });
 
     try {
-      const displayName = newUser.name?.length ? newUser.name : 'utilisateur';
+      const displayName = newUser.name?.length ? escapeHtml(newUser.name) : 'utilisateur';
 
-      // Construct tenant login URL
       let loginUrl = '';
       if (tenantSubdomain) {
         const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-        const domain = baseUrl.replace(/^https?:\/\//, ''); // Remove protocol
+        const domain = baseUrl.replace(/^https?:\/\//, '');
         loginUrl = `https://${tenantSubdomain}.${domain}/login`;
       }
 
@@ -69,11 +94,11 @@ export async function POST(req: NextRequest) {
           "Votre espace Simpaap est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :",
           '',
           `Email : ${newUser.email}`,
-          `Mot de passe : password`,
+          `Mot de passe : ${finalPassword}`,
           '',
           loginUrl ? `Lien de connexion : ${loginUrl}` : '',
           '',
-          'Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe dès votre première connexion.',
+          'IMPORTANT : Changez votre mot de passe dès votre première connexion.',
           '',
           'Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.',
           '',
@@ -81,20 +106,23 @@ export async function POST(req: NextRequest) {
           'SIMPAC',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
-<p>Votre accès à <strong>Simpaap</strong> est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :</p>
-<p><strong>Email :</strong> ${newUser.email}<br/>
-<strong>Mot de passe :</strong> <code>password</code></p>
+<p>Votre accès à <strong>Simpaap</strong> est prêt.</p>
+<div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+  <p><strong>Email :</strong> ${escapeHtml(newUser.email)}</p>
+  <p><strong>Mot de passe :</strong> <code style="background: #e0e0e0; padding: 2px 6px;">${escapeHtml(finalPassword)}</code></p>
+</div>
 ${loginUrl ? `<p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0;">Se connecter</a></p>` : ''}
-<p style="color: #666; font-size: 14px;">Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe dès votre première connexion.</p>
+<p style="color: #e74c3c; font-weight: bold;">IMPORTANT : Changez votre mot de passe dès votre première connexion.</p>
 <p>Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.</p>
 <p>À bientôt,<br/>SIMPAC</p>`,
         customId: 'user-created',
       });
     } catch (error) {
       if (error instanceof MailjetNotConfiguredError) {
-        console.warn('Mailjet non configuré — email de bienvenue non envoyé.');
-      } else {
-        console.error('Erreur envoi email de bienvenue Mailjet:', error);
+        // Dev only: return password if email not configured
+        if (process.env.NODE_ENV !== 'production') {
+          return NextResponse.json({ ...newUser, tempPassword: finalPassword }, { status: 201 });
+        }
       }
     }
 
@@ -211,11 +239,11 @@ export async function DELETE(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'SUPERADMIN' && session.user.role !== 'ADMIN') {
+    // Fixed operator precedence bug: added parentheses
+    if (!session || (session.user.role !== 'SUPERADMIN' && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
     }
 
-    console.log(session.user)
     let users = [];
     if (session.user.tenantSlug === 'admin') {
       users = await prisma.user.findMany({

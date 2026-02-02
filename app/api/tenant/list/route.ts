@@ -1,20 +1,32 @@
 // app/api/tenant/list/route.ts
 import prisma from "@/lib/prisma";
-import { NextResponse } from 'next/server';
+import { verifyInternalApiToken } from "@/lib/security";
+import { getServerSession } from "next-auth";
+import { NextRequest, NextResponse } from 'next/server';
+import { authOptions } from "../../auth/[...nextauth]/route";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    console.log('Start API TEnant List')
-    // Récupère uniquement les subdomains (léger et rapide)
+    // Security: Check for internal API token (from middleware) OR SUPERADMIN session
+    const internalToken = req.headers.get('x-internal-token');
+    const isInternalRequest = internalToken && verifyInternalApiToken(internalToken);
+
+    if (!isInternalRequest) {
+      // If not internal request, require SUPERADMIN authentication
+      const session = await getServerSession(authOptions);
+      if (!session || session.user.role !== 'SUPERADMIN') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    // Fetch tenants (no sensitive logging)
     const tenants = await prisma.tenant.findMany({
       select: {
         subdomain: true,
       },
     });
 
-    // Retourne un tableau de strings
-    const subdomains = tenants.map((t: { subdomain: any; }) => t.subdomain);
-    console.log(subdomains.join(','))
+    const subdomains = tenants.map((t: { subdomain: string }) => t.subdomain);
 
     return NextResponse.json({
       success: true,
@@ -24,13 +36,13 @@ export async function GET() {
     });
 
   } catch (error) {
-    console.error("Error fetching tenants:", error);
-    
+    console.error("Error fetching tenants");
+
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: "Failed to fetch tenants",
-        tenants: [] 
+        tenants: []
       },
       { status: 500 }
     );

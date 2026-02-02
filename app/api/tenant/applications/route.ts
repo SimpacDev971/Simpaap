@@ -107,9 +107,22 @@ export async function GET(req: NextRequest) {
  * PUT /api/tenant/applications
  * Met à jour les applications accessibles pour un tenant
  * Body: { tenantId: string, applicationIds: number[] }
+ * Requires SUPERADMIN authentication
  */
 export async function PUT(req: NextRequest) {
   try {
+    // Security: Require authentication
+    const { getServerSession } = await import('next-auth');
+    const { authOptions } = await import('../../auth/[...nextauth]/route');
+
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'SUPERADMIN') {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const { tenantId, applicationIds } = body as {
       tenantId: string;
@@ -130,7 +143,14 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Vérifier que le tenant existe
+    // Validate applicationIds are numbers
+    if (!applicationIds.every(id => typeof id === 'number' && Number.isInteger(id))) {
+      return NextResponse.json(
+        { error: 'applicationIds must be an array of integers' },
+        { status: 400 }
+      );
+    }
+
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
     });
