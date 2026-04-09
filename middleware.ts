@@ -289,12 +289,14 @@ export async function middleware(req: NextRequest) {
   // Security: Remove localhost in production
   const allowedDomains = process.env.NODE_ENV === 'production'
     ? [
+        "simpaap.vercel.app",
         "print.simp.ac",
         "www.print.simp.ac",
         "tudominio.ar",
         "www.tudominio.ar",
       ]
     : [
+        "simpaap.vercel.app",
         "print.simp.ac",
         "www.print.simp.ac",
         "tudominio.ar",
@@ -322,12 +324,12 @@ export async function middleware(req: NextRequest) {
   
   // Build baseUrl for internal API calls
   // In dev (port present): always use localhost to avoid DNS issues with subdomains
-  // In prod (no port): use the request origin (same server)
+  // In prod: use NEXTAUTH_URL (main domain) so tenant subdomain requests don't call themselves
   const requestHost = req.headers.get("host") || "localhost:3000";
   const portMatch = requestHost.match(/:(\d+)$/);
   const baseUrl = portMatch
     ? `http://localhost:${portMatch[1]}`
-    : `${url.protocol}//${requestHost}`;
+    : (process.env.NEXTAUTH_URL || `${url.protocol}//${requestHost}`);
 
   // ────────────────────────────────────────────────
   // 🧠 1) SUBDOMAIN CASE → tenant.print.simp.ac
