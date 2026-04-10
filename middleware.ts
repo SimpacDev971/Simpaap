@@ -367,6 +367,16 @@ export async function middleware(req: NextRequest) {
   let routePathPrefix = potentialSubdomain && isReserved ? potentialSubdomain : null;
   const fullPathSegment = routePathPrefix || first;
 
+  // ────────────────────────────────────────────────
+  // 🚪 PATH-BASED TENANT ACCESS: print.simp.ac/go/[tenant]/...
+  // Emergency bypass when subdomain DNS is not available
+  // ────────────────────────────────────────────────
+  if (isMainDomain && segments[0] === 'go' && segments[1]) {
+    const tenantSlug = segments[1];
+    const restPath = segments.length > 2 ? '/' + segments.slice(2).join('/') : '/';
+    return NextResponse.rewrite(new URL(`/${tenantSlug}${restPath}`, req.url));
+  }
+
   // Main domain or reserved subdomain handling
   if (isMainDomain || isReserved) {
 
