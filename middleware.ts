@@ -281,6 +281,10 @@ const standardRoutes = ["api", "_next", "_static", "favicon.ico"];
 const publicRoutes = ["login", "register", "pricing", "about", "contact"]; // Pages sur domaine principal
 const reservedSubdomains = ["www", "app", "dashboard"]; // Sous-domaines non-tenant
 
+// 🚨 EMERGENCY HARDCODE (urgence): tenants forcés sans check DB (bypass tenantExists)
+// À retirer dès que la DB / le routing subdomain est stable.
+const HARDCODED_TENANTS = ["admin"];
+
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl;
   let hostname = req.headers.get("host") || "";
@@ -345,6 +349,11 @@ export async function middleware(req: NextRequest) {
       return NextResponse.rewrite(new URL(`/${subdomain}${url.pathname}`, req.url));
     }
 
+    // 🚨 EMERGENCY HARDCODE: tenant "admin" bypass DB check
+    if (HARDCODED_TENANTS.includes(subdomain)) {
+      return NextResponse.rewrite(new URL(`/${subdomain}${url.pathname}`, req.url));
+    }
+
     // 2. Verify tenant exists
     const exists = await tenantExists(subdomain, baseUrl);
 
@@ -385,6 +394,12 @@ export async function middleware(req: NextRequest) {
     }
 
     const authorizedRoutes = [...standardRoutes, ...publicRoutes, ...reservedSubdomains];
+
+    // 🚨 EMERGENCY HARDCODE: tenant "admin" bypass DB check (Vercel domain has no subdomain routing)
+    // Path already starts with the tenant slug (e.g. /admin/foo) so it matches app/[subdomain] as-is.
+    if (!isReserved && HARDCODED_TENANTS.includes(fullPathSegment)) {
+        return NextResponse.next();
+    }
 
     if (!authorizedRoutes.includes(fullPathSegment)) {
         const existsAsTenant = await tenantExists(fullPathSegment, baseUrl);
