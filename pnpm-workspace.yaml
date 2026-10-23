@@ -1,0 +1,11 @@
+packages:
+  - '.'
+
+# pnpm >= 11: build scripts are blocked unless explicitly allowed
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  sharp: true
+  '@tsparticles/engine': false
+  unrs-resolver: false
