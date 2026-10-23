@@ -1,4 +1,6 @@
-import prisma from '../lib/prisma'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 async function main() {
 
@@ -80,7 +82,7 @@ async function main() {
   }
 
   // Helpers pour retrouver les speedId par value
-  const speedId = (value: string) => speeds.find(s => s.value === value)!.id
+  const speedId = (value) => speeds.find(s => s.value === value).id
 
   // ── TARIFS D'AFFRANCHISSEMENT ─────────────────────────
   const affranchissementsData = [

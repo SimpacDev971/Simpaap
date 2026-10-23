@@ -12,7 +12,7 @@
     "dev:proxy": "cross-env NODE_ENV=development concurrently \"npm run dev\" \"npm run proxy\""
   },
   "prisma": {
-    "seed": "node --loader ts-node/esm prisma/seed.mts"
+    "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.9.4",
