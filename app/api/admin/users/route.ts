@@ -106,7 +106,10 @@ export async function POST(req: NextRequest) {
         text: [
           `Bonjour ${displayName},`,
           '',
-          'Votre compte Simpaap a été créé. Cliquez sur le lien ci-dessous pour définir votre mot de passe :',
+          'Votre compte Simpaap a été créé.',
+          `Identifiant : ${newUser.email}`,
+          '',
+          'Cliquez sur le lien ci-dessous pour définir votre mot de passe :',
           '',
           setupUrl || 'Contactez votre administrateur pour obtenir votre lien de connexion.',
           '',
@@ -118,7 +121,7 @@ export async function POST(req: NextRequest) {
           'Simpaap',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
-<p>Votre compte <strong>Simpaap</strong> a été créé.</p>
+<p>Votre compte <strong>Simpaap</strong> a été créé.<br/>Identifiant : <strong>${escapeHtml(newUser.email)}</strong></p>
 ${setupUrl ? `<p style="margin: 24px 0;"><a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">Définir mon mot de passe</a></p>` : ''}
 <p style="color: #666; font-size: 14px;">Ce lien est valide pendant <strong>72 heures</strong>.</p>
 <p style="color: #666; font-size: 14px;">Si vous ne reconnaissez pas cette invitation, ignorez cet email.</p>

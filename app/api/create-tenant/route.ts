@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
           `Bonjour,`,
           '',
           `Votre espace Simpaap "${escapeHtml(name)}" a été créé avec succès.`,
+          `Identifiant : ${adminEmail}`,
           '',
           'Cliquez sur le lien ci-dessous pour définir votre mot de passe et accéder à votre espace :',
           '',
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>Votre espace Simpaap est prêt</h2>
-            <p>L'espace <strong>${escapeHtml(name)}</strong> a été créé avec succès.</p>
+            <p>L'espace <strong>${escapeHtml(name)}</strong> a été créé avec succès.<br/>Identifiant : <strong>${escapeHtml(adminEmail)}</strong></p>
             <p style="margin: 24px 0;">
               <a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">
                 Définir mon mot de passe
