@@ -2,7 +2,7 @@
 import SessionClientProvider from "@/app/SessionClientProvider";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { SparklesCore } from '@/components/ui/shadcn-io/sparkles';
-import { signIn } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -38,12 +38,13 @@ export default function SubdomainLoginPage() {
         const sessionRes = await fetch("/api/auth/session");
         const session = await sessionRes.json();
 
-        if (session?.user?.tenantSlug === subdomain) {
+        // SUPERADMIN peut se connecter sur tous les tenants
+        if (session?.user?.role === "SUPERADMIN" || session?.user?.tenantSlug === subdomain) {
           // Use window.location to force a full page reload and session refresh
           window.location.href = "/";
         } else {
           setCustomErr("Vous n'avez pas accès à ce tenant");
-          await signIn("credentials", { redirect: false, email: "", password: "" });
+          await signOut({ redirect: false });
         }
       }
     } catch (err: any) {
