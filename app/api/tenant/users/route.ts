@@ -11,6 +11,7 @@ import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import { MailjetNotConfiguredError, sendMailjetEmail } from '@/lib/mailjet';
+import { checkRoleAssignment } from '@/lib/auth/apiGuards';
 
 function isAdmin(session: Session | null) {
   return session && (session.user.role === 'ADMIN' || session.user.role === 'SUPERADMIN');
@@ -74,6 +75,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Format d\'email invalide' }, { status: 400 });
     }
 
+    const roleError = checkRoleAssignment(session!, data.role || 'MEMBER', tenant.subdomain);
+    if (roleError) {
+      return NextResponse.json({ error: roleError }, { status: 403 });
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email: data.email } });
     if (existingUser) {
       return NextResponse.json({ error: 'Un utilisateur avec cet email existe déjà' }, { status: 409 });
@@ -103,48 +109,53 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Generate invitation token — user sets their own password, never transmitted in clear
+    const crypto = await import('crypto');
+    await prisma.passwordResetToken.deleteMany({ where: { email: newUser.email } });
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+    await prisma.passwordResetToken.create({
+      data: { email: newUser.email, token: inviteToken, expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000) },
+    });
+
     try {
       const displayName = newUser.name?.length ? escapeHtml(newUser.name) : 'utilisateur';
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
       const domain = baseUrl.replace(/^https?:\/\//, '');
-      const loginUrl = `https://${tenant.subdomain}.${domain}/login`;
+      const setupUrl = `https://${tenant.subdomain}.${domain}/reset-password?token=${inviteToken}`;
 
       await sendMailjetEmail({
         to: { email: newUser.email, name: newUser.name ?? undefined },
-        subject: 'Bienvenue sur Simpaap',
+        subject: 'Bienvenue sur Simpaap — Activez votre compte',
         text: [
           `Bonjour ${displayName},`,
           '',
-          "Votre espace Simpaap est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :",
+          'Votre compte Simpaap a été créé. Cliquez sur le lien ci-dessous pour définir votre mot de passe :',
           '',
-          `Email : ${newUser.email}`,
-          `Mot de passe : ${finalPassword}`,
+          setupUrl,
           '',
-          `Lien de connexion : ${loginUrl}`,
+          'Ce lien est valide pendant 72 heures.',
           '',
-          'IMPORTANT : Changez votre mot de passe dès votre première connexion.',
-          '',
-          'Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.',
+          'Si vous ne reconnaissez pas cette invitation, ignorez cet email.',
           '',
           'À bientôt,',
           'SIMPAC',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
-<p>Votre accès à <strong>Simpaap</strong> est prêt.</p>
-<div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-  <p><strong>Email :</strong> ${escapeHtml(newUser.email)}</p>
-  <p><strong>Mot de passe :</strong> <code style="background: #e0e0e0; padding: 2px 6px;">${escapeHtml(finalPassword)}</code></p>
-</div>
-<p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0;">Se connecter</a></p>
-<p style="color: #e74c3c; font-weight: bold;">IMPORTANT : Changez votre mot de passe dès votre première connexion.</p>
-<p>Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.</p>
+<p>Votre compte <strong>Simpaap</strong> a été créé.</p>
+<p style="margin: 24px 0;">
+  <a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">
+    Définir mon mot de passe
+  </a>
+</p>
+<p style="color: #666; font-size: 14px;">Ce lien est valide pendant <strong>72 heures</strong>.</p>
+<p style="color: #666; font-size: 14px;">Si vous ne reconnaissez pas cette invitation, ignorez cet email.</p>
 <p>À bientôt,<br/>SIMPAC</p>`,
-        customId: 'user-created',
+        customId: 'user-invited',
       });
     } catch (error) {
       if (error instanceof MailjetNotConfiguredError) {
         if (process.env.NODE_ENV !== 'production') {
-          return NextResponse.json({ ...newUser, tempPassword: finalPassword }, { status: 201 });
+          return NextResponse.json({ ...newUser }, { status: 201 });
         }
       }
     }
@@ -162,6 +173,12 @@ export async function PUT(req: NextRequest) {
   }
   const tenant = await getTenantFromRequest(req);
   if (!tenant) return NextResponse.json({ error: 'Invalid tenant' }, { status: 400 });
+
+  // Verify admin belongs to this tenant (except SUPERADMIN)
+  if (session?.user.role === 'ADMIN' && session.user.tenantSlug !== tenant.subdomain) {
+    return NextResponse.json({ error: 'Forbidden: You can only update users in your own tenant' }, { status: 403 });
+  }
+
   try {
     const data = await req.json();
     if (!data.id) return NextResponse.json({ error: 'Missing user id' }, { status: 400 });
@@ -174,7 +191,15 @@ export async function PUT(req: NextRequest) {
     if (oldUser.role === 'SUPERADMIN' && oldUser.id !== session?.user?.id) {
       return NextResponse.json({ error: 'Vous ne pouvez pas modifier un autre SUPERADMIN' }, { status: 403 });
     }
-    
+
+    // Changement de rôle : SUPERADMIN uniquement sur le tenant admin, par un SUPERADMIN du tenant admin
+    if (data.role && data.role !== oldUser.role) {
+      const roleError = checkRoleAssignment(session!, data.role, tenant.subdomain);
+      if (roleError) {
+        return NextResponse.json({ error: roleError }, { status: 403 });
+      }
+    }
+
     const { hash } = await import('bcryptjs');
     const updateData: any = {
       email: data.email || oldUser.email,
@@ -204,6 +229,12 @@ export async function DELETE(req: NextRequest) {
   }
   const tenant = await getTenantFromRequest(req);
   if (!tenant) return NextResponse.json({ error: 'Invalid tenant' }, { status: 400 });
+
+  // Verify admin belongs to this tenant (except SUPERADMIN)
+  if (session?.user.role === 'ADMIN' && session.user.tenantSlug !== tenant.subdomain) {
+    return NextResponse.json({ error: 'Forbidden: You can only delete users in your own tenant' }, { status: 403 });
+  }
+
   const url = new URL(req.url);
   const id = url.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'Missing user id' }, { status: 400 });
@@ -211,6 +242,9 @@ export async function DELETE(req: NextRequest) {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user || user.tenantId !== tenant.id)
       return NextResponse.json({ error: 'User not in tenant' }, { status: 400 });
+    // Ne pas permettre la suppression d'un SUPERADMIN
+    if (user.role === 'SUPERADMIN')
+      return NextResponse.json({ error: 'Impossible de supprimer un SUPERADMIN' }, { status: 403 });
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error: unknown) {

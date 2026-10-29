@@ -3,16 +3,28 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { canAccessTenantId } from '@/lib/auth/apiGuards';
 
 /**
  * GET /api/tenant/[id]/print-options
  * Récupère toutes les options d'impression assignées au tenant
+ * Requires session — non-SUPERADMIN limited to their own tenant
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
+
+  if (!(await canAccessTenantId(session, id))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     const tenant = await prisma.tenant.findUnique({
@@ -59,17 +71,12 @@ export async function PUT(
 
   const { id } = await params;
 
-  // SUPERADMIN can update any tenant, ADMIN can only update their own
-  if (session.user.role !== 'SUPERADMIN') {
-    if (!session.user.tenantSlug) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    const userTenant = await prisma.tenant.findUnique({
-      where: { subdomain: session.user.tenantSlug },
-    });
-    if (!userTenant || userTenant.id !== id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+  // SUPERADMIN can update any tenant, ADMIN can only update their own, MEMBER cannot update
+  if (session.user.role !== 'SUPERADMIN' && session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  if (!(await canAccessTenantId(session, id))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {

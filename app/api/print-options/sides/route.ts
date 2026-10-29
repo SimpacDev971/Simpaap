@@ -3,14 +3,26 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { canAccessTenantId } from '@/lib/auth/apiGuards';
 
 /**
  * GET /api/print-options/sides
  * Récupère tous les côtés d'impression (global)
  * Optional: ?tenantId=xxx to get sides assigned to a tenant
+ * Requires session — non-SUPERADMIN limited to their own tenant
  */
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const tenantId = req.nextUrl.searchParams.get('tenantId');
+
+  if (tenantId && !(await canAccessTenantId(session, tenantId))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     if (tenantId) {

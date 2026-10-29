@@ -12,6 +12,7 @@ import { hash } from 'bcryptjs';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '../../auth/[...nextauth]/route';
+import { checkRoleAssignment } from '@/lib/auth/apiGuards';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,6 +36,12 @@ export async function POST(req: NextRequest) {
     // Validate email format
     if (!isValidEmail(email)) {
       return NextResponse.json({ error: 'Format d\'email invalide' }, { status: 400 });
+    }
+
+    // SUPERADMIN uniquement sur le tenant admin, par un SUPERADMIN du tenant admin
+    const roleError = checkRoleAssignment(session, role || 'MEMBER', tenantSubdomain);
+    if (roleError) {
+      return NextResponse.json({ error: roleError }, { status: 403 });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -75,53 +82,53 @@ export async function POST(req: NextRequest) {
 
     const newUser = await prisma.user.create({ data: userData });
 
+    // Generate invitation token — user sets their own password, never transmitted in clear
+    const crypto = await import('crypto');
+    await prisma.passwordResetToken.deleteMany({ where: { email: newUser.email } });
+    const inviteToken = crypto.randomBytes(32).toString('hex');
+    await prisma.passwordResetToken.create({
+      data: { email: newUser.email, token: inviteToken, expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000) },
+    });
+
     try {
       const displayName = newUser.name?.length ? escapeHtml(newUser.name) : 'utilisateur';
 
-      let loginUrl = '';
+      let setupUrl = '';
       if (tenantSubdomain) {
         const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
         const domain = baseUrl.replace(/^https?:\/\//, '');
-        loginUrl = `https://${tenantSubdomain}.${domain}/login`;
+        setupUrl = `https://${tenantSubdomain}.${domain}/reset-password?token=${inviteToken}`;
       }
 
       await sendMailjetEmail({
         to: { email: newUser.email, name: newUser.name ?? undefined },
-        subject: 'Bienvenue sur Simpaap',
+        subject: 'Bienvenue sur Simpaap — Activez votre compte',
         text: [
           `Bonjour ${displayName},`,
           '',
-          "Votre espace Simpaap est prêt. Vous pouvez maintenant vous connecter avec vos identifiants :",
+          'Votre compte Simpaap a été créé. Cliquez sur le lien ci-dessous pour définir votre mot de passe :',
           '',
-          `Email : ${newUser.email}`,
-          `Mot de passe : ${finalPassword}`,
+          setupUrl || 'Contactez votre administrateur pour obtenir votre lien de connexion.',
           '',
-          loginUrl ? `Lien de connexion : ${loginUrl}` : '',
+          'Ce lien est valide pendant 72 heures.',
           '',
-          'IMPORTANT : Changez votre mot de passe dès votre première connexion.',
-          '',
-          'Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.',
+          'Si vous ne reconnaissez pas cette invitation, ignorez cet email.',
           '',
           'À bientôt,',
           'SIMPAC',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
-<p>Votre accès à <strong>Simpaap</strong> est prêt.</p>
-<div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-  <p><strong>Email :</strong> ${escapeHtml(newUser.email)}</p>
-  <p><strong>Mot de passe :</strong> <code style="background: #e0e0e0; padding: 2px 6px;">${escapeHtml(finalPassword)}</code></p>
-</div>
-${loginUrl ? `<p><a href="${loginUrl}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0;">Se connecter</a></p>` : ''}
-<p style="color: #e74c3c; font-weight: bold;">IMPORTANT : Changez votre mot de passe dès votre première connexion.</p>
-<p>Si vous ne reconnaissez pas cette invitation, contactez immédiatement votre administrateur.</p>
+<p>Votre compte <strong>Simpaap</strong> a été créé.</p>
+${setupUrl ? `<p style="margin: 24px 0;"><a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">Définir mon mot de passe</a></p>` : ''}
+<p style="color: #666; font-size: 14px;">Ce lien est valide pendant <strong>72 heures</strong>.</p>
+<p style="color: #666; font-size: 14px;">Si vous ne reconnaissez pas cette invitation, ignorez cet email.</p>
 <p>À bientôt,<br/>SIMPAC</p>`,
-        customId: 'user-created',
+        customId: 'user-invited',
       });
     } catch (error) {
       if (error instanceof MailjetNotConfiguredError) {
-        // Dev only: return password if email not configured
         if (process.env.NODE_ENV !== 'production') {
-          return NextResponse.json({ ...newUser, tempPassword: finalPassword }, { status: 201 });
+          return NextResponse.json({ ...newUser }, { status: 201 });
         }
       }
     }
@@ -147,7 +154,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Vérifier que l'utilisateur existe
-    const existingUser = await prisma.user.findUnique({ where: { id } });
+    const existingUser = await prisma.user.findUnique({ where: { id }, include: { tenant: true } });
     if (!existingUser) {
       return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 });
     }
@@ -155,6 +162,16 @@ export async function PUT(req: NextRequest) {
     // Empêcher un SUPERADMIN de modifier un autre SUPERADMIN
     if (existingUser.role === 'SUPERADMIN' && existingUser.id !== session.user.id) {
       return NextResponse.json({ error: 'Vous ne pouvez pas modifier un autre SUPERADMIN' }, { status: 403 });
+    }
+
+    // Rôle et tenant finaux : un SUPERADMIN doit rester sur le tenant admin
+    const finalRole = role || existingUser.role;
+    const finalTenantSubdomain = tenantSubdomain !== undefined ? tenantSubdomain : existingUser.tenant?.subdomain;
+    if (finalRole !== existingUser.role || finalTenantSubdomain !== existingUser.tenant?.subdomain) {
+      const roleError = checkRoleAssignment(session, finalRole, finalTenantSubdomain);
+      if (roleError) {
+        return NextResponse.json({ error: roleError }, { status: 403 });
+      }
     }
 
     // Vérifier si l'email est changé et s'il existe déjà

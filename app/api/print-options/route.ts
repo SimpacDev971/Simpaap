@@ -4,14 +4,24 @@ import {
   setPrintOptionsCache,
 } from '@/lib/cache';
 import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { canAccessTenantSubdomain } from '@/lib/auth/apiGuards';
 
 /**
  * GET /api/print-options?subdomain=xxx
  * Récupère toutes les options d'impression assignées à un tenant
  * Utilise le cache LRU pour optimiser les performances
+ * Requires session — non-SUPERADMIN limited to their own tenant
  */
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const subdomain = req.nextUrl.searchParams.get('subdomain');
 
   if (!subdomain) {
@@ -19,6 +29,10 @@ export async function GET(req: NextRequest) {
       { error: 'Subdomain parameter is required' },
       { status: 400 }
     );
+  }
+
+  if (!canAccessTenantSubdomain(session, subdomain)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {

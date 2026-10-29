@@ -1,13 +1,22 @@
 import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 /**
  * POST /api/print-options/calculate-postage
  * Calculates postage rate for a given weight and optionally speed
  * Body: { weightGrams: number, speedId?: number }
  * Returns: { rate: { id, fullName, name, price, speed } | null }
+ * Requires session
  */
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { weightGrams, speedId } = body;

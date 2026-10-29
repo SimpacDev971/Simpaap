@@ -7,8 +7,15 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
  * GET /api/print-options/affranchissements
  * Retrieves all affranchissements (global)
  * Optional: ?activeOnly=true to get only active rates
+ * Requires session
  */
 export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const activeOnly = req.nextUrl.searchParams.get('activeOnly') === 'true';
 
   try {
