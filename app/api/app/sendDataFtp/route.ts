@@ -1,37 +1,55 @@
-// app/api/upload-mail/route.ts
+// app/api/app/sendDataFtp/route.ts — dépôt SFTP (SSH)
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import prisma from '@/lib/prisma';
-import * as ftp from 'basic-ftp';
+import { createHash, timingSafeEqual } from 'crypto';
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { Readable } from 'stream';
+import SftpClient from 'ssh2-sftp-client';
 
-// Configuration FTP (à adapter selon votre serveur)
-const FTP_CONFIG = {
-  host: process.env.FTP_HOST || 'ftp.example.com',
-  port: parseInt(process.env.FTP_PORT || '21'),
-  user: process.env.FTP_USER || 'username',
+// Empreinte SHA256 de la clé du serveur (format `ssh-keygen -lf` : "SHA256:xxxx")
+// Si définie, la connexion est refusée quand la clé présentée ne correspond pas
+const FTP_HOST_FINGERPRINT = process.env.FTP_HOST_FINGERPRINT?.replace(/^SHA256:/, '').replace(/=+$/, '');
+
+function verifyHostKey(key: Buffer): boolean {
+  if (!FTP_HOST_FINGERPRINT) return true;
+  const received = Buffer.from(createHash('sha256').update(key).digest('base64').replace(/=+$/, ''));
+  const expected = Buffer.from(FTP_HOST_FINGERPRINT);
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
+// Configuration SFTP (à adapter selon votre serveur)
+const SFTP_CONFIG: SftpClient.ConnectOptions = {
+  host: process.env.FTP_HOST || 'sftp.example.com',
+  port: parseInt(process.env.FTP_PORT || '22'),
+  username: process.env.FTP_USER || 'username',
   password: process.env.FTP_PASSWORD || 'password',
-  secure: process.env.FTP_SECURE === 'true', // true pour FTPS
+  readyTimeout: 20000,
+  hostVerifier: verifyHostKey,
 };
 
 // ==============================
 // CONFIGURATIONS
 // ==============================
-const VERBOSE_FTP = false;            // active/désactive le verbose FTP
+const VERBOSE_FTP = false;            // active/désactive le verbose SFTP
 const WRITE_CONTROL_FILE = false;     // active/désactive control.json
 const SUB_FOLDER = false;     // active/désactive sous dossier
 // ==============================
 
-// Répertoire de destination sur le FTP
+// Répertoire de destination sur le SFTP
 const FTP_BASE_DIR = process.env.FTP_BASE_DIR || '/uploads/mail';
 
 export async function POST(request: NextRequest) {
-  const client = new ftp.Client();
-  client.ftp.verbose = VERBOSE_FTP;
-
-  // Get session for print_item creation
+  // Session obligatoire : un dépôt déclenche une impression facturée
   const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const client = new SftpClient();
+  if (!FTP_HOST_FINGERPRINT) {
+    console.warn('⚠ FTP_HOST_FINGERPRINT non défini : clé du serveur SFTP non vérifiée');
+  }
+
   let printItemId: string | null = null;
 
   try {
@@ -90,22 +108,24 @@ export async function POST(request: NextRequest) {
           : ""; // si false, déposer à la racine
       const depositDir = SUB_FOLDER ? `${FTP_BASE_DIR}/${depositId}` : FTP_BASE_DIR;
 
-      await client.access(FTP_CONFIG);
-      if (SUB_FOLDER) await client.ensureDir(depositDir);
+      await client.connect({
+          ...SFTP_CONFIG,
+          debug: VERBOSE_FTP ? (msg: string) => console.log(msg) : undefined,
+      });
+      if (SUB_FOLDER) await client.mkdir(depositDir, true);
 
       // Upload de chaque PDF sous son ID du JSON
       for (const item of pdfFiles) {
           const buffer = Buffer.from(await item.file.arrayBuffer());
-          const stream = Readable.from(buffer);
           const filename = `${item.id}.pdf`;
-          await client.uploadFrom(stream, `${depositDir}/${filename}`);
+          await client.put(buffer, `${depositDir}/${filename}`);
           console.log(`✓ Upload: ${filename}`);
       }
 
       // Upload du JSON metadata
       const metadataFilename = `${depositPrefix}metadata.json`;
-      await client.uploadFrom(
-          Readable.from(Buffer.from(JSON.stringify(metadata, null, 2))),
+      await client.put(
+          Buffer.from(JSON.stringify(metadata, null, 2)),
           `${depositDir}/${metadataFilename}`
       );
 
@@ -121,14 +141,14 @@ export async function POST(request: NextRequest) {
               metadata: metadataFilename,
               status: "uploaded",
           };
-          await client.uploadFrom(
-              Readable.from(Buffer.from(JSON.stringify(controlData, null, 2))),
+          await client.put(
+              Buffer.from(JSON.stringify(controlData, null, 2)),
               `${depositDir}/${depositPrefix}control.json`
           );
           console.log("✓ control.json créé");
       }
 
-      client.close();
+      await client.end();
 
       // Update print_item status to 'sent' on success
       if (printItemId) {
@@ -150,8 +170,8 @@ export async function POST(request: NextRequest) {
           printItemId,
       });
   } catch (error: unknown) {
-      console.error("Erreur FTP:", error);
-      try { client.close(); } catch {}
+      console.error("Erreur SFTP:", error);
+      try { await client.end(); } catch {}
 
       // Update print_item status to 'failed' on error
       if (printItemId) {

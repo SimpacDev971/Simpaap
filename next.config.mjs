@@ -2,6 +2,9 @@
 const nextConfig = {
     reactStrictMode: true,
 
+    // ssh2 loads optional native bindings at runtime: keep it out of the server bundle
+    serverExternalPackages: ['ssh2', 'ssh2-sftp-client'],
+
     // Security headers
     async headers() {
       return [

@@ -9,3 +9,6 @@ allowBuilds:
   sharp: true
   '@tsparticles/engine': false
   unrs-resolver: false
+  # Optional native bindings: ssh2 falls back to pure JS
+  ssh2: false
+  cpu-features: false
