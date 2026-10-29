@@ -5,7 +5,8 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   escapeHtml,
-  validatePassword
+  validatePassword,
+  buildTenantLoginUrl
 } from '@/lib/security';
 import { getServerSession, Session } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -122,6 +123,7 @@ export async function POST(req: NextRequest) {
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
       const domain = baseUrl.replace(/^https?:\/\//, '');
       const setupUrl = `https://${tenant.subdomain}.${domain}/reset-password?token=${inviteToken}`;
+      const loginUrl = buildTenantLoginUrl(baseUrl, tenant.subdomain);
 
       await sendMailjetEmail({
         to: { email: newUser.email, name: newUser.name ?? undefined },
@@ -131,6 +133,7 @@ export async function POST(req: NextRequest) {
           '',
           'Votre compte Simpaap a été créé.',
           `Identifiant : ${newUser.email}`,
+          `URL : ${loginUrl}`,
           '',
           'Cliquez sur le lien ci-dessous pour définir votre mot de passe :',
           '',
@@ -144,7 +147,7 @@ export async function POST(req: NextRequest) {
           'Simpaap',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
-<p>Votre compte <strong>Simpaap</strong> a été créé.<br/>Identifiant : <strong>${escapeHtml(newUser.email)}</strong></p>
+<p>Votre compte <strong>Simpaap</strong> a été créé.<br/>Identifiant : <strong>${escapeHtml(newUser.email)}</strong><br/>URL : <a href="${loginUrl}" style="color: #0070f3;">${loginUrl}</a></p>
 <p style="margin: 24px 0;">
   <a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">
     Définir mon mot de passe

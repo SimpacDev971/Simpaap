@@ -294,3 +294,24 @@ export function buildResetUrl(baseUrl: string, subdomain: string | null, token: 
     return `${baseUrl}/reset-password?token=${token}`;
   }
 }
+
+/**
+ * Build tenant login URL (https://<subdomain>.<domain>/login)
+ */
+export function buildTenantLoginUrl(baseUrl: string, subdomain: string | null): string {
+  try {
+    const url = new URL(baseUrl);
+
+    if (subdomain && isValidSubdomain(subdomain)) {
+      url.hostname = `${subdomain}.${url.hostname}`;
+    }
+
+    url.pathname = '/login';
+    url.search = '';
+
+    return url.toString();
+  } catch {
+    // Fallback for invalid base URL
+    return `${baseUrl}/login`;
+  }
+}

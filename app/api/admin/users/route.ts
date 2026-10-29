@@ -6,7 +6,8 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   escapeHtml,
-  validatePassword
+  validatePassword,
+  buildTenantLoginUrl
 } from '@/lib/security';
 import { hash } from 'bcryptjs';
 import { getServerSession } from 'next-auth';
@@ -94,10 +95,12 @@ export async function POST(req: NextRequest) {
       const displayName = newUser.name?.length ? escapeHtml(newUser.name) : 'utilisateur';
 
       let setupUrl = '';
+      let loginUrl = '';
       if (tenantSubdomain) {
         const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
         const domain = baseUrl.replace(/^https?:\/\//, '');
         setupUrl = `https://${tenantSubdomain}.${domain}/reset-password?token=${inviteToken}`;
+        loginUrl = buildTenantLoginUrl(baseUrl, tenantSubdomain);
       }
 
       await sendMailjetEmail({
@@ -108,6 +111,7 @@ export async function POST(req: NextRequest) {
           '',
           'Votre compte Simpaap a été créé.',
           `Identifiant : ${newUser.email}`,
+          ...(loginUrl ? [`URL : ${loginUrl}`] : []),
           '',
           'Cliquez sur le lien ci-dessous pour définir votre mot de passe :',
           '',
@@ -121,7 +125,7 @@ export async function POST(req: NextRequest) {
           'Simpaap',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
-<p>Votre compte <strong>Simpaap</strong> a été créé.<br/>Identifiant : <strong>${escapeHtml(newUser.email)}</strong></p>
+<p>Votre compte <strong>Simpaap</strong> a été créé.<br/>Identifiant : <strong>${escapeHtml(newUser.email)}</strong>${loginUrl ? `<br/>URL : <a href="${loginUrl}" style="color: #0070f3;">${loginUrl}</a>` : ''}</p>
 ${setupUrl ? `<p style="margin: 24px 0;"><a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">Définir mon mot de passe</a></p>` : ''}
 <p style="color: #666; font-size: 14px;">Ce lien est valide pendant <strong>72 heures</strong>.</p>
 <p style="color: #666; font-size: 14px;">Si vous ne reconnaissez pas cette invitation, ignorez cet email.</p>

@@ -1,6 +1,6 @@
 import { MailjetNotConfiguredError, sendEmail } from '@/lib/email';
 import prisma from '@/lib/prisma';
-import { checkRateLimit, RATE_LIMITS, isValidEmail, buildResetUrl, escapeHtml } from '@/lib/security';
+import { checkRateLimit, RATE_LIMITS, isValidEmail, buildResetUrl, buildTenantLoginUrl, escapeHtml } from '@/lib/security';
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
 
     const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_URL || 'http://localhost:3000';
     const resetUrl = buildResetUrl(baseUrl, user.tenant?.subdomain || null, token);
-    
+    const loginUrl = buildTenantLoginUrl(baseUrl, user.tenant?.subdomain || null);
+
     const displayName = user.name?.length ? escapeHtml(user.name) : 'utilisateur';
     
     try {
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest) {
           `Bonjour ${displayName},`,
           '',
           'Vous avez demandé la réinitialisation de votre mot de passe.',
+          `Identifiant : ${user.email}`,
+          `URL : ${loginUrl}`,
           '',
           `Cliquez sur le lien suivant pour réinitialiser votre mot de passe :`,
           resetUrl,
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2 style="color: #333;">Réinitialisation de votre mot de passe</h2>
             <p>Bonjour ${displayName},</p>
-            <p>Vous avez demandé la réinitialisation de votre mot de passe.</p>
+            <p>Vous avez demandé la réinitialisation de votre mot de passe.<br/>Identifiant : <strong>${escapeHtml(user.email)}</strong><br/>URL : <a href="${loginUrl}" style="color: #0070f3;">${loginUrl}</a></p>
             <p style="margin: 30px 0;">
               <a href="${resetUrl}" 
                  style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">

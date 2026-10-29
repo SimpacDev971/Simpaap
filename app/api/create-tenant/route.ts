@@ -6,7 +6,8 @@ import {
   isValidSubdomain,
   checkRateLimit,
   RATE_LIMITS,
-  escapeHtml
+  escapeHtml,
+  buildTenantLoginUrl
 } from '@/lib/security'
 import { MailjetNotConfiguredError, sendMailjetEmail } from '@/lib/mailjet'
 import { NextRequest, NextResponse } from 'next/server'
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
       const domain = baseUrl.replace(/^https?:\/\//, '')
       const setupUrl = `https://${result.tenant.subdomain}.${domain}/reset-password?token=${inviteToken}`
+      const loginUrl = buildTenantLoginUrl(baseUrl, result.tenant.subdomain)
 
       await sendMailjetEmail({
         to: { email: adminEmail, name: `Admin ${name}` },
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
           '',
           `Votre espace Simpaap "${escapeHtml(name)}" a été créé avec succès.`,
           `Identifiant : ${adminEmail}`,
+          `URL : ${loginUrl}`,
           '',
           'Cliquez sur le lien ci-dessous pour définir votre mot de passe et accéder à votre espace :',
           '',
@@ -120,7 +123,7 @@ export async function POST(request: NextRequest) {
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2>Votre espace Simpaap est prêt</h2>
-            <p>L'espace <strong>${escapeHtml(name)}</strong> a été créé avec succès.<br/>Identifiant : <strong>${escapeHtml(adminEmail)}</strong></p>
+            <p>L'espace <strong>${escapeHtml(name)}</strong> a été créé avec succès.<br/>Identifiant : <strong>${escapeHtml(adminEmail)}</strong><br/>URL : <a href="${loginUrl}" style="color: #0070f3;">${loginUrl}</a></p>
             <p style="margin: 24px 0;">
               <a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">
                 Définir mon mot de passe
