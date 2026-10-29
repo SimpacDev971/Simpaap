@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { useTenantApplicationsContext } from "@/contexts/TenantApplicationsContext";
+import { ROUTE_PERMISSIONS, hasRoleAccess } from "@/lib/auth/permissions";
 import { ChevronDown, Loader2, User } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
@@ -133,6 +134,10 @@ export default function Navbar({ tenantSubdomain }: NavbarProps) {
   ? "SIMPAAP"
   : tenantSubdomain?.toUpperCase() || "SIMPAAP";
 
+  // Menu Administration réservé aux rôles autorisés sur /admin (MEMBER exclu)
+  const canAccessAdmin = !!session?.user?.role
+    && hasRoleAccess(session.user.role, ROUTE_PERMISSIONS["/[subdomain]/admin"]);
+
 
   return (
     <nav className="border-b">
@@ -193,13 +198,15 @@ export default function Navbar({ tenantSubdomain }: NavbarProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <Button
-                  variant={pathname?.startsWith("/admin") ? "secondary" : "ghost"}
-                  onClick={() => router.push("/admin")}
-                  size="sm"
-                >
-                  Administration
-                </Button>
+                {canAccessAdmin && (
+                  <Button
+                    variant={pathname?.startsWith("/admin") ? "secondary" : "ghost"}
+                    onClick={() => router.push("/admin")}
+                    size="sm"
+                  >
+                    Administration
+                  </Button>
+                )}
               </div>
             )}
           </div>
