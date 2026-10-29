@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
           'Si vous ne reconnaissez pas cette invitation, ignorez cet email.',
           '',
           'À bientôt,',
-          'SIMPAC',
+          'Simpaap',
         ].join('\n'),
         html: `<p>Bonjour ${displayName},</p>
 <p>Votre compte <strong>Simpaap</strong> a été créé.</p>
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
 </p>
 <p style="color: #666; font-size: 14px;">Ce lien est valide pendant <strong>72 heures</strong>.</p>
 <p style="color: #666; font-size: 14px;">Si vous ne reconnaissez pas cette invitation, ignorez cet email.</p>
-<p>À bientôt,<br/>SIMPAC</p>`,
+<p>À bientôt,<br/>Simpaap</p>`,
         customId: 'user-invited',
       });
     } catch (error) {

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
           'Si vous n\'avez pas demandé cette réinitialisation, ignorez cet email.',
           '',
           'À bientôt,',
-          'SIMPAC',
+          'Simpaap',
         ].join('\n'),
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
             </p>
             <p style="margin-top: 30px;">
               À bientôt,<br/>
-              <strong>SIMPAC</strong>
+              <strong>Simpaap</strong>
             </p>
           </div>
         `,

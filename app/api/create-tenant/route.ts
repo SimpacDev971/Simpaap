@@ -82,58 +82,62 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      return { tenant: newTenant, admin, password: securePassword }
+      return { tenant: newTenant, admin }
     })
 
-    // Send welcome email with secure password
+    // Generate invitation token — admin sets their own password, never transmitted in clear
+    const crypto = await import('crypto')
+    await prisma.passwordResetToken.deleteMany({ where: { email: adminEmail } })
+    const inviteToken = crypto.randomBytes(32).toString('hex')
+    await prisma.passwordResetToken.create({
+      data: { email: adminEmail, token: inviteToken, expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000) },
+    })
+
+    // Send welcome email with setup link only
     try {
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
       const domain = baseUrl.replace(/^https?:\/\//, '')
-      const loginUrl = `https://${result.tenant.subdomain}.${domain}/login`
+      const setupUrl = `https://${result.tenant.subdomain}.${domain}/reset-password?token=${inviteToken}`
 
       await sendMailjetEmail({
         to: { email: adminEmail, name: `Admin ${name}` },
-        subject: 'Votre espace Simpaap est prêt',
+        subject: 'Votre espace Simpaap est prêt — Activez votre compte',
         text: [
           `Bonjour,`,
           '',
-          `Votre espace Simpaap "${name}" a été créé avec succès.`,
+          `Votre espace Simpaap "${escapeHtml(name)}" a été créé avec succès.`,
           '',
-          `Vos identifiants de connexion :`,
-          `Email : ${adminEmail}`,
-          `Mot de passe : ${securePassword}`,
+          'Cliquez sur le lien ci-dessous pour définir votre mot de passe et accéder à votre espace :',
           '',
-          `Lien de connexion : ${loginUrl}`,
+          setupUrl,
           '',
-          'IMPORTANT : Pour des raisons de sécurité, veuillez changer votre mot de passe dès votre première connexion.',
+          'Ce lien est valide pendant 72 heures.',
           '',
           'À bientôt,',
-          'SIMPAC',
+          'Simpaap',
         ].join('\n'),
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>Bienvenue sur Simpaap</h2>
-            <p>Votre espace <strong>${escapeHtml(name)}</strong> a été créé avec succès.</p>
-            <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <p><strong>Email :</strong> ${escapeHtml(adminEmail)}</p>
-              <p><strong>Mot de passe :</strong> <code style="background: #e0e0e0; padding: 2px 6px;">${escapeHtml(securePassword)}</code></p>
-            </div>
-            <p><a href="${loginUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">Se connecter</a></p>
-            <p style="color: #e74c3c; font-weight: bold;">IMPORTANT : Veuillez changer votre mot de passe dès votre première connexion.</p>
-            <p style="color: #666; margin-top: 30px;">À bientôt,<br/>SIMPAC</p>
+            <h2>Votre espace Simpaap est prêt</h2>
+            <p>L'espace <strong>${escapeHtml(name)}</strong> a été créé avec succès.</p>
+            <p style="margin: 24px 0;">
+              <a href="${setupUrl}" style="display: inline-block; padding: 12px 24px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">
+                Définir mon mot de passe
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Ce lien est valide pendant <strong>72 heures</strong>.</p>
+            <p style="color: #666; margin-top: 30px;">À bientôt,<br/>Simpaap</p>
           </div>
         `,
         customId: 'tenant-created',
       })
     } catch (emailError) {
       if (emailError instanceof MailjetNotConfiguredError) {
-        // Email not configured - return password in response for dev only
         if (process.env.NODE_ENV !== 'production') {
           return NextResponse.json(
             {
               tenant: result.tenant,
-              message: `Tenant créé. Mot de passe temporaire (dev only): ${securePassword}`,
-              tempPassword: securePassword,
+              message: `Tenant créé. Email non configuré en dev.`,
             },
             { status: 201 }
           )
